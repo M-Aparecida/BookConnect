@@ -17,6 +17,7 @@ import {
   Loader2,
 } from 'lucide-react';
 
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 // ==========================================
 // 1. TIPOS E INTERFACES
 // ==========================================
@@ -348,13 +349,33 @@ export default function App() {
                 </button>
               </>
             ) : (
-              <button
-                onClick={() => setIsAuthenticated(true)}
-                className="flex items-center space-x-1.5 bg-amber-900 text-amber-50 px-4 py-1.5 rounded hover:bg-amber-950 transition-colors text-xs tracking-wide shadow-xs font-semibold"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Entrar no Sistema</span>
-              </button>
+              <div className="flex items-center space-x-4">
+                {/* Botão de login tradicional que você já tinha */}
+                <button
+                  onClick={() => setIsAuthenticated(true)}
+                  className="flex items-center space-x-1.5 bg-amber-900 text-amber-50 px-4 py-1.5 rounded hover:bg-amber-950 transition-colors text-xs tracking-wide shadow-xs font-semibold"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Entrar no Sistema</span>
+                </button>
+
+                {/* NOVO: Botão de Login do Google */}
+                <GoogleOAuthProvider clientId="COLE_SEU_CLIENT_ID_AQUI">
+                  <GoogleLogin
+                    onSuccess={(credentialResponse) => {
+                      // Isso vai imprimir o JWT no console para o seu print!
+                      console.log("=== LOGIN GOOGLE REALIZADO COM SUCESSO ===");
+                      console.log("Token JWT gerado:", credentialResponse.credential);
+                      
+                      // Autentica o usuário na sua aplicação React após o sucesso
+                      setIsAuthenticated(true); 
+                    }}
+                    onError={() => {
+                      console.log('Falha no login com o Google');
+                    }}
+                  />
+                </GoogleOAuthProvider>
+              </div>
             )}
 
             <button
