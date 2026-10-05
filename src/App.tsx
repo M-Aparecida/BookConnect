@@ -360,7 +360,7 @@ export default function App() {
                 </button>
 
                 {/* NOVO: Botão de Login do Google */}
-                <GoogleOAuthProvider clientId="COLE_SEU_CLIENT_ID_AQUI">
+                <GoogleOAuthProvider clientId="491601926895-i88383dlnq7kq2lgtau4ea63frdqh0dp.apps.googleusercontent.com">
                   <GoogleLogin
                     onSuccess={(credentialResponse) => {
                       // Isso vai imprimir o JWT no console para o seu print!
