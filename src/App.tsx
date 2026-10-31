@@ -1038,191 +1038,390 @@ const SearchView = ({
   );
 };
 
-// 5. CHAT
+// 5. CHAT COM AMAZON API GATEWAY WEBSOCKET + LAMBDA + GEMINI
+
+const WEBSOCKET_URL =
+  'wss://m45jpb90s4.execute-api.us-east-1.amazonaws.com/dev/';
+
 const ChatView = ({
   currentUser,
-  activeChatUser,
 }: {
   currentUser: any;
-  activeChatUser: any;
 }) => {
-  const [contacts, setContacts] = useState(INITIAL_CONTACTS);
-  const [messages, setMessages] = useState<any>(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<
+    {
+      id: string;
+      sender: 'user' | 'assistant';
+      text: string;
+      timestamp: string;
+    }[]
+  >([]);
 
-  const [activeContact, setActiveContact] = useState<any>(null);
   const [inputMsg, setInputMsg] = useState('');
+  const [connectionStatus, setConnectionStatus] = useState<
+    'connecting' | 'connected' | 'disconnected' | 'error'
+  >('connecting');
 
+  const [isWaitingResponse, setIsWaitingResponse] = useState(false);
+  const [connectionError, setConnectionError] = useState('');
+
+  const socketRef = React.useRef<WebSocket | null>(null);
+
+  // Abre a conexão autenticada ao entrar no chat.
   useEffect(() => {
-    if (activeChatUser) {
-      if (!contacts.find((contact) => contact.id === activeChatUser.id)) {
-        setContacts((prev) => [
-          { ...activeChatUser, lastMessage: 'Nova conversa' },
-          ...prev,
-        ]);
+    let socket: WebSocket | null = null;
+    let isMounted = true;
+
+    const connectWebSocket = async () => {
+      try {
+        setConnectionStatus('connecting');
+        setConnectionError('');
+
+        // Recupera os tokens da sessão Cognito.
+        const session = await fetchAuthSession();
+        const accessToken = session.tokens?.accessToken?.toString();
+
+        if (!accessToken) {
+          throw new Error(
+            'Não foi encontrado um Access Token. Faça login novamente.'
+          );
+        }
+
+        /*
+         * O token é enviado na URL da conexão.
+         * O backend deve validar esse token no $connect
+         * por meio de um Lambda Authorizer ou da própria Lambda.
+         */
+        const authenticatedUrl =
+          `${WEBSOCKET_URL}?token=${encodeURIComponent(accessToken)}`;
+
+        socket = new WebSocket(authenticatedUrl);
+        socketRef.current = socket;
+
+        socket.onopen = () => {
+          if (!isMounted) return;
+
+          setConnectionStatus('connected');
+          setConnectionError('');
+        };
+
+        socket.onmessage = (event) => {
+          if (!isMounted) return;
+
+          try {
+            const data = JSON.parse(event.data);
+
+            // Aceita diferentes nomes de propriedade na resposta da Lambda.
+            const responseText =
+              data.answer ??
+              data.response ??
+              data.message ??
+              data.text;
+
+            if (responseText) {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `${Date.now()}-assistant`,
+                  sender: 'assistant',
+                  text: String(responseText),
+                  timestamp: new Date().toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  }),
+                },
+              ]);
+
+              setIsWaitingResponse(false);
+            }
+
+            if (data.error) {
+              setConnectionError(String(data.error));
+              setIsWaitingResponse(false);
+            }
+          } catch (error) {
+            console.error(
+              'Não foi possível interpretar a resposta do WebSocket:',
+              error
+            );
+
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `${Date.now()}-assistant`,
+                sender: 'assistant',
+                text: String(event.data),
+                timestamp: new Date().toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                }),
+              },
+            ]);
+
+            setIsWaitingResponse(false);
+          }
+        };
+
+        socket.onerror = (event) => {
+          console.error('Erro na conexão WebSocket:', event);
+
+          if (!isMounted) return;
+
+          setConnectionStatus('error');
+          setConnectionError(
+            'Não foi possível conectar ao chat. Verifique a API Gateway e a Lambda.'
+          );
+          setIsWaitingResponse(false);
+        };
+
+        socket.onclose = (event) => {
+          if (!isMounted) return;
+
+          setConnectionStatus('disconnected');
+          setIsWaitingResponse(false);
+
+          console.log(
+            'WebSocket encerrado:',
+            event.code,
+            event.reason
+          );
+        };
+      } catch (error) {
+        console.error('Erro ao conectar ao WebSocket:', error);
+
+        if (!isMounted) return;
+
+        setConnectionStatus('error');
+        setConnectionError(
+          error instanceof Error
+            ? error.message
+            : 'Erro ao iniciar conexão com o chat.'
+        );
+      }
+    };
+
+    connectWebSocket();
+
+    // Encerra a conexão quando o componente é desmontado.
+    return () => {
+      isMounted = false;
+
+      if (socket) {
+        socket.close();
       }
 
-      setActiveContact(activeChatUser);
-    } else if (!activeContact && contacts.length > 0) {
-      setActiveContact(contacts[0]);
-    }
-  }, [activeChatUser]);
+      socketRef.current = null;
+    };
+  }, []);
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!inputMsg.trim() || !activeContact) return;
+    const question = inputMsg.trim();
 
-    const newMsg = {
-      id: Date.now().toString(),
-      senderId: currentUser.id,
-      text: inputMsg,
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-    };
+    if (!question) return;
 
-    setMessages((prev: any) => ({
+    const socket = socketRef.current;
+
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      setConnectionError(
+        'O chat não está conectado. Aguarde a conexão ou recarregue a página.'
+      );
+      return;
+    }
+
+    // Exibe a pergunta enviada pelo usuário.
+    setMessages((prev) => [
       ...prev,
-      [activeContact.id]: [
-        ...(prev[activeContact.id] || []),
-        newMsg,
-      ],
-    }));
-
-    setContacts((prev) =>
-      prev.map((contact) =>
-        contact.id === activeContact.id
-          ? { ...contact, lastMessage: inputMsg }
-          : contact
-      )
-    );
+      {
+        id: `${Date.now()}-user`,
+        sender: 'user',
+        text: question,
+        timestamp: new Date().toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      },
+    ]);
 
     setInputMsg('');
+    setIsWaitingResponse(true);
+    setConnectionError('');
+
+    /*
+     * A mensagem é encaminhada para a rota $default do API Gateway.
+     * O formato precisa corresponder ao esperado pela Lambda.
+     */
+    socket.send(
+      JSON.stringify({
+        action: 'message',
+        question,
+      })
+    );
   };
 
-  const activeMessages = activeContact
-    ? messages[activeContact.id] || []
-    : [];
+  const handleReconnect = () => {
+    // Recarrega a página para criar uma nova conexão autenticada.
+    window.location.reload();
+  };
 
   return (
     <div className="max-w-5xl mx-auto py-6 px-4 h-[calc(100vh-80px)] flex flex-col fade-in">
-      <h2 className="text-2xl font-bold text-gray-800 mb-4">
-        Mensagens Privadas
-      </h2>
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">
+            Chat com Gemini
+          </h2>
 
-      <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex h-full min-h-[400px]">
-        <div className="w-1/3 md:w-1/4 border-r border-gray-200 bg-gray-50 flex flex-col">
-          <div className="p-3 border-b border-gray-200 font-semibold text-gray-700 bg-white">
-            Contatos
-          </div>
+          <p className="text-sm text-gray-500 mt-1">
+            Faça perguntas e converse com o assistente do BookConnect.
+          </p>
+        </div>
 
-          <div className="overflow-y-auto flex-1">
-            {contacts.map((contact: any) => (
-              <div
-                key={contact.id}
-                onClick={() => setActiveContact(contact)}
-                className={`flex items-center p-3 cursor-pointer transition-colors border-l-4 ${
-                  activeContact?.id === contact.id
-                    ? 'bg-white border-indigo-500'
-                    : 'border-transparent hover:bg-gray-100'
-                }`}
-              >
-                <AvatarDisplay
-                  src={contact.avatar}
-                  alt={contact.name}
-                  className="w-10 h-10 rounded-full mr-3 shrink-0"
-                />
+        <div className="flex items-center gap-2">
+          <span
+            className={`w-2.5 h-2.5 rounded-full ${
+              connectionStatus === 'connected'
+                ? 'bg-green-500'
+                : connectionStatus === 'connecting'
+                ? 'bg-yellow-500'
+                : 'bg-red-500'
+            }`}
+          />
 
-                <div className="hidden sm:block overflow-hidden">
-                  <p className="font-medium text-gray-900 truncate">
-                    {contact.name}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate">
-                    {contact.lastMessage}
-                  </p>
-                </div>
-              </div>
-            ))}
+          <span className="text-sm text-gray-600">
+            {connectionStatus === 'connected'
+              ? 'Conectado'
+              : connectionStatus === 'connecting'
+              ? 'Conectando...'
+              : connectionStatus === 'error'
+              ? 'Erro na conexão'
+              : 'Desconectado'}
+          </span>
+
+          {connectionStatus !== 'connected' && (
+            <button
+              type="button"
+              onClick={handleReconnect}
+              className="text-sm text-indigo-600 hover:underline ml-2"
+            >
+              Reconectar
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col min-h-[400px]">
+        <div className="p-3 border-b border-gray-200 bg-gray-50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
+              <MessageCircle size={20} />
+            </div>
+
+            <div>
+              <p className="font-semibold text-gray-900">
+                Assistente BookConnect
+              </p>
+
+              <p className="text-xs text-gray-500">
+                Usuário: {currentUser?.name || 'Usuário autenticado'}
+              </p>
+            </div>
           </div>
         </div>
 
-        {activeContact ? (
-          <div className="flex-1 flex flex-col bg-white relative">
-            <div className="p-3 border-b border-gray-200 flex items-center shadow-sm z-10 bg-white">
-              <AvatarDisplay
-                src={activeContact.avatar}
-                alt={activeContact.name}
-                className="w-8 h-8 rounded-full mr-3 shrink-0"
-              />
-              <span className="font-semibold text-gray-900">
-                {activeContact.name}
-              </span>
+        <div className="flex-1 p-4 overflow-y-auto bg-[#F9FAFB] space-y-4">
+          {messages.length === 0 && (
+            <div className="text-center text-gray-400 mt-10">
+              <MessageCircle size={36} className="mx-auto mb-3 opacity-50" />
+
+              <p className="font-medium">
+                Olá! Envie uma pergunta para começar.
+              </p>
+
+              <p className="text-sm mt-1">
+                Sua mensagem será enviada à API Gateway e processada pela Lambda.
+              </p>
             </div>
+          )}
 
-            <div className="flex-1 p-4 overflow-y-auto bg-[#F9FAFB] space-y-4 flex flex-col">
-              {activeMessages.length === 0 ? (
-                <div className="text-center text-gray-400 mt-10 text-sm">
-                  Inicie uma conversa com {activeContact.name.split(' ')[0]}
-                </div>
-              ) : (
-                activeMessages.map((msg: any) => {
-                  const isMe = msg.senderId === currentUser.id;
+          {messages.map((msg) => {
+            const isUser = msg.sender === 'user';
 
-                  return (
-                    <div
-                      key={msg.id}
-                      className={`flex ${
-                        isMe ? 'justify-end' : 'justify-start'
-                      }`}
-                    >
-                      <div
-                        className={`max-w-[75%] rounded-2xl px-4 py-2 shadow-sm ${
-                          isMe
-                            ? 'bg-indigo-600 text-white rounded-br-sm'
-                            : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
-                        }`}
-                      >
-                        <p className="text-sm">{msg.text}</p>
-                        <span
-                          className={`text-[10px] block mt-1 text-right ${
-                            isMe ? 'text-indigo-200' : 'text-gray-400'
-                          }`}
-                        >
-                          {msg.timestamp}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <div className="p-3 bg-white border-t border-gray-200">
-              <form onSubmit={handleSend} className="flex space-x-2">
-                <input
-                  type="text"
-                  value={inputMsg}
-                  onChange={(e) => setInputMsg(e.target.value)}
-                  placeholder="Escreva uma mensagem..."
-                  className="flex-1 bg-gray-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-full px-4 py-2 text-sm outline-none transition-all"
-                />
-
-                <button
-                  type="submit"
-                  disabled={!inputMsg.trim()}
-                  className="bg-indigo-600 text-white p-2 rounded-full hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            return (
+              <div
+                key={msg.id}
+                className={`flex ${
+                  isUser ? 'justify-end' : 'justify-start'
+                }`}
+              >
+                <div
+                  className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-sm ${
+                    isUser
+                      ? 'bg-indigo-600 text-white rounded-br-sm'
+                      : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
+                  }`}
                 >
-                  <Send size={18} className="ml-1" />
-                </button>
-              </form>
+                  <p className="text-sm whitespace-pre-wrap break-words">
+                    {msg.text}
+                  </p>
+
+                  <span
+                    className={`text-[10px] block mt-2 text-right ${
+                      isUser ? 'text-indigo-200' : 'text-gray-400'
+                    }`}
+                  >
+                    {msg.timestamp}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+
+          {isWaitingResponse && (
+            <div className="flex justify-start">
+              <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-4 py-3 text-sm text-gray-500">
+                Gemini está processando sua pergunta...
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-400 bg-gray-50">
-            Selecione um contato para conversar.
+          )}
+        </div>
+
+        {connectionError && (
+          <div className="px-4 py-2 bg-red-50 border-t border-red-100 text-sm text-red-600">
+            {connectionError}
           </div>
         )}
+
+        <div className="p-3 bg-white border-t border-gray-200">
+          <form onSubmit={handleSend} className="flex gap-2">
+            <input
+              type="text"
+              value={inputMsg}
+              onChange={(e) => setInputMsg(e.target.value)}
+              placeholder={
+                connectionStatus === 'connected'
+                  ? 'Digite sua pergunta...'
+                  : 'Aguardando conexão com o chat...'
+              }
+              disabled={connectionStatus !== 'connected'}
+              className="flex-1 bg-gray-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-full px-4 py-2 text-sm outline-none transition-all disabled:opacity-60"
+            />
+
+            <button
+              type="submit"
+              disabled={
+                !inputMsg.trim() ||
+                connectionStatus !== 'connected' ||
+                isWaitingResponse
+              }
+              className="bg-indigo-600 text-white p-3 rounded-full hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              title="Enviar pergunta"
+            >
+              <Send size={18} />
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );
@@ -1644,10 +1843,7 @@ export default function App() {
             )}
 
             {currentView === 'chat' && currentUser && (
-              <ChatView
-                currentUser={currentUser}
-                activeChatUser={activeChatUser}
-              />
+              <ChatView currentUser={currentUser} />
             )}
 
             {currentView === 'profile' && viewedUser && (
