@@ -76,25 +76,6 @@ const INITIAL_REVIEWS = [
   },
 ];
 
-const INITIAL_CONTACTS = [
-  {
-    id: 'u2',
-    name: 'João Silva',
-    avatar: '',
-    lastMessage: 'Você já leu Duna?',
-  },
-];
-
-const INITIAL_MESSAGES = {
-  u2: [
-    {
-      id: 'm1',
-      senderId: 'u2',
-      text: 'Oi! Vi sua resenha.',
-      timestamp: '10:30',
-    },
-  ],
-};
 
 // --- COMPONENTES AUXILIARES ---
 const RatingStars = ({
@@ -1516,7 +1497,6 @@ export default function App() {
   const [authError, setAuthError] = useState('');
 
   const [viewedUser, setViewedUser] = useState<any>(null);
-  const [activeChatUser, setActiveChatUser] = useState<any>(null);
 
   // Recupera a sessão Cognito ao abrir o aplicativo.
   useEffect(() => {
@@ -1563,9 +1543,8 @@ export default function App() {
     setCurrentView('profile');
   };
 
-  const handleSendMessageClick = (user: any) => {
-    setActiveChatUser(user);
-    setCurrentView('chat');
+  const handleSendMessageClick = () => {
+  setCurrentView('chat');
   };
 
   const handleLogout = async () => {
@@ -1574,7 +1553,6 @@ export default function App() {
       setCurrentUser(null);
       setCurrentView('feed');
       setViewedUser(null);
-      setActiveChatUser(null);
     } catch (error) {
       console.error('Erro ao sair do Cognito:', error);
       setAuthError('Não foi possível encerrar a sessão. Tente novamente.');
