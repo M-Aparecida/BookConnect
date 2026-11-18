@@ -21,6 +21,14 @@ import {
   signOut,
 } from 'aws-amplify/auth';
 
+// --- CONFIGURAÇÃO DAS APIS AWS ---
+const WEBSOCKET_URL =
+  'https://8epdgbn6f3.execute-api.us-east-1.amazonaws.com/profile';
+
+// <-- SUBSTITUA PELA INVOKE URL DO SEU API GATEWAY (MANTENDO O /profile NO FINAL)
+const PROFILE_API_URL =
+  'https://8epdgbn6f3.execute-api.us-east-1.amazonaws.com';
+
 // --- MOCK DATA INICIAL ---
 const MOCK_USERS = {
   u2: {
@@ -75,7 +83,6 @@ const INITIAL_REVIEWS = [
     createdAt: new Date(Date.now() - 10000000).toISOString(),
   },
 ];
-
 
 // --- COMPONENTES AUXILIARES ---
 const RatingStars = ({
@@ -248,7 +255,7 @@ const Header = ({
   );
 };
 
-// 2. PERFIL
+// 2. PERFIL (OPERAÇÃO PUT /profile -> SALVA FOTO NO S3 E DADOS NO DYNAMODB)
 const ProfileView = ({
   profileUser,
   currentUser,
@@ -270,24 +277,85 @@ const ProfileView = ({
   const [name, setName] = useState(profileUser.name);
   const [bio, setBio] = useState(profileUser.bio || '');
   const [avatar, setAvatar] = useState(profileUser.avatar || '');
+  const [newImageBase64, setNewImageBase64] = useState<string | null>(null);
+  const [newImageType, setNewImageType] = useState<string>('image/jpeg');
+  const [isSaving, setIsSaving] = useState(false);
 
   const userReviews = reviews.filter(
     (review) => review.user.id === profileUser.id
   );
 
-  const handleSave = () => {
-    onSaveProfile({ ...profileUser, name, bio, avatar });
-    setIsEditing(false);
+  const handleSave = async () => {
+    setIsSaving(true);
+
+    try {
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString();
+
+      if (!idToken) {
+        throw new Error('Sessão expirada. Faça login novamente.');
+      }
+
+      // Envia operação PUT para /profile atualizando dados cadastrais e imagem
+      const response = await fetch(PROFILE_API_URL, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          bio,
+          avatarUrl: avatar.startsWith('http') ? avatar : '',
+          imageBase64: newImageBase64,
+          contentType: newImageType,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao atualizar perfil na AWS.');
+      }
+
+      // Adiciona query string de timestamp na URL do S3 para forçar atualização imediata na tela
+      const updatedAvatarUrl = result.profile?.avatarUrl
+        ? `${result.profile.avatarUrl}?t=${Date.now()}`
+        : avatar;
+
+      setAvatar(updatedAvatarUrl);
+      onSaveProfile({
+        ...profileUser,
+        name,
+        bio,
+        avatar: updatedAvatarUrl,
+      });
+
+      setNewImageBase64(null);
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Erro ao salvar perfil:', error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Erro ao salvar dados no DynamoDB/S3.'
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
 
     if (file) {
+      setNewImageType(file.type || 'image/jpeg');
       const reader = new FileReader();
 
       reader.onloadend = () => {
-        setAvatar(String(reader.result || ''));
+        const base64Str = String(reader.result || '');
+        setAvatar(base64Str);
+        setNewImageBase64(base64Str);
       };
 
       reader.readAsDataURL(file);
@@ -319,10 +387,11 @@ const ProfileView = ({
                 isEditing ? (
                   <button
                     onClick={handleSave}
-                    className="flex items-center space-x-1 bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-700"
+                    disabled={isSaving}
+                    className="flex items-center space-x-1 bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-700 disabled:opacity-60"
                   >
                     <Save size={16} />
-                    <span>Salvar</span>
+                    <span>{isSaving ? 'Salvando...' : 'Salvar'}</span>
                   </button>
                 ) : (
                   <button
@@ -351,19 +420,23 @@ const ProfileView = ({
             <div className="space-y-4 pt-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Foto de Perfil
+                  Foto de Perfil (S3)
                 </label>
 
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg, image/png"
                   onChange={handleImageUpload}
                   className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 outline-none"
                 />
 
                 {avatar && (
                   <button
-                    onClick={() => setAvatar('')}
+                    type="button"
+                    onClick={() => {
+                      setAvatar('');
+                      setNewImageBase64(null);
+                    }}
                     className="text-xs text-red-500 mt-2 hover:underline"
                   >
                     Remover foto
@@ -401,6 +474,9 @@ const ProfileView = ({
               <h1 className="text-2xl font-bold text-gray-900">
                 {profileUser.name}
               </h1>
+              {profileUser.email && (
+                <p className="text-sm text-gray-500">{profileUser.email}</p>
+              )}
               <p className="text-gray-600 mt-2 whitespace-pre-wrap">
                 {profileUser.bio || 'Nenhuma biografia informada.'}
               </p>
@@ -1020,10 +1096,6 @@ const SearchView = ({
 };
 
 // 5. CHAT COM AMAZON API GATEWAY WEBSOCKET + LAMBDA + GEMINI
-
-const WEBSOCKET_URL =
-  'wss://m45jpb90s4.execute-api.us-east-1.amazonaws.com/dev/';
-
 const ChatView = ({
   currentUser,
 }: {
@@ -1048,7 +1120,6 @@ const ChatView = ({
 
   const socketRef = React.useRef<WebSocket | null>(null);
 
-  // Abre a conexão autenticada ao entrar no chat.
   useEffect(() => {
     let socket: WebSocket | null = null;
     let isMounted = true;
@@ -1058,7 +1129,6 @@ const ChatView = ({
         setConnectionStatus('connecting');
         setConnectionError('');
 
-        // Recupera os tokens da sessão Cognito.
         const session = await fetchAuthSession();
         const accessToken = session.tokens?.accessToken?.toString();
 
@@ -1068,13 +1138,9 @@ const ChatView = ({
           );
         }
 
-        /*
-         * O token é enviado na URL da conexão.
-         * O backend deve validar esse token no $connect
-         * por meio de um Lambda Authorizer ou da própria Lambda.
-         */
-        const authenticatedUrl =
-          `${WEBSOCKET_URL}?token=${encodeURIComponent(accessToken)}`;
+        const authenticatedUrl = `${WEBSOCKET_URL}?token=${encodeURIComponent(
+          accessToken
+        )}`;
 
         socket = new WebSocket(authenticatedUrl);
         socketRef.current = socket;
@@ -1092,7 +1158,6 @@ const ChatView = ({
           try {
             const data = JSON.parse(event.data);
 
-            // Aceita diferentes nomes de propriedade na resposta da Lambda.
             const responseText =
               data.answer ??
               data.response ??
@@ -1161,11 +1226,7 @@ const ChatView = ({
           setConnectionStatus('disconnected');
           setIsWaitingResponse(false);
 
-          console.log(
-            'WebSocket encerrado:',
-            event.code,
-            event.reason
-          );
+          console.log('WebSocket encerrado:', event.code, event.reason);
         };
       } catch (error) {
         console.error('Erro ao conectar ao WebSocket:', error);
@@ -1183,7 +1244,6 @@ const ChatView = ({
 
     connectWebSocket();
 
-    // Encerra a conexão quando o componente é desmontado.
     return () => {
       isMounted = false;
 
@@ -1211,7 +1271,6 @@ const ChatView = ({
       return;
     }
 
-    // Exibe a pergunta enviada pelo usuário.
     setMessages((prev) => [
       ...prev,
       {
@@ -1229,10 +1288,6 @@ const ChatView = ({
     setIsWaitingResponse(true);
     setConnectionError('');
 
-    /*
-     * A mensagem é encaminhada para a rota $default do API Gateway.
-     * O formato precisa corresponder ao esperado pela Lambda.
-     */
     socket.send(
       JSON.stringify({
         action: 'message',
@@ -1242,7 +1297,6 @@ const ChatView = ({
   };
 
   const handleReconnect = () => {
-    // Recarrega a página para criar uma nova conexão autenticada.
     window.location.reload();
   };
 
@@ -1498,7 +1552,7 @@ export default function App() {
 
   const [viewedUser, setViewedUser] = useState<any>(null);
 
-  // Recupera a sessão Cognito ao abrir o aplicativo.
+  // Recupera a sessão Cognito e carrega os dados + foto do DynamoDB/S3 via GET /profile
   useEffect(() => {
     const loadAuthenticatedUser = async () => {
       try {
@@ -1507,20 +1561,47 @@ export default function App() {
 
         const email = session.tokens?.idToken?.payload?.email;
         const tokenName = session.tokens?.idToken?.payload?.name;
+        const picture = session.tokens?.idToken?.payload?.picture;
+        const idToken = session.tokens?.idToken?.toString();
 
-        const name =
+        let savedName =
           typeof tokenName === 'string'
             ? tokenName
             : typeof email === 'string'
             ? email.split('@')[0]
             : user.username;
+        let savedBio = 'Estudante e apaixonada por livros.';
+        let savedAvatarUrl = typeof picture === 'string' ? picture : '';
+
+        // Busca dados cadastrais e foto salvos no DynamoDB / S3
+        if (idToken) {
+          try {
+            const profileRes = await fetch(PROFILE_API_URL, {
+              method: 'GET',
+              headers: {
+                Authorization: `Bearer ${idToken}`,
+              },
+            });
+
+            if (profileRes.ok) {
+              const profileData = await profileRes.json();
+              if (profileData.name) savedName = profileData.name;
+              if (profileData.bio) savedBio = profileData.bio;
+              if (profileData.avatarUrl) {
+                savedAvatarUrl = `${profileData.avatarUrl}?t=${Date.now()}`;
+              }
+            }
+          } catch (err) {
+            console.log('Perfil ainda não salvo no DynamoDB, usando dados do Cognito.');
+          }
+        }
 
         setCurrentUser({
           id: user.userId,
-          name,
+          name: savedName,
           email: typeof email === 'string' ? email : '',
-          avatar: '',
-          bio: 'Estudante e apaixonada por livros.',
+          avatar: savedAvatarUrl,
+          bio: savedBio,
         });
       } catch {
         setCurrentUser(null);
@@ -1544,7 +1625,7 @@ export default function App() {
   };
 
   const handleSendMessageClick = () => {
-  setCurrentView('chat');
+    setCurrentView('chat');
   };
 
   const handleLogout = async () => {
