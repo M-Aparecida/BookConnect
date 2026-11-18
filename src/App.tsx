@@ -21,13 +21,14 @@ import {
   signOut,
 } from 'aws-amplify/auth';
 
-// --- CONFIGURAÇÃO DAS APIS AWS ---
-const WEBSOCKET_URL =
-  'https://8epdgbn6f3.execute-api.us-east-1.amazonaws.com/profile';
 
-// <-- SUBSTITUA PELA INVOKE URL DO SEU API GATEWAY (MANTENDO O /profile NO FINAL)
+// 1. URL original do WebSocket do Chat
+const WEBSOCKET_URL =
+  'wss://m45jpb90s4.execute-api.us-east-1.amazonaws.com/dev/';
+
+// 2. URL da HTTP API com /profile no final
 const PROFILE_API_URL =
-  'https://8epdgbn6f3.execute-api.us-east-1.amazonaws.com';
+  'https://8epdgbn6f3.execute-api.us-east-1.amazonaws.com/profile';
 
 // --- MOCK DATA INICIAL ---
 const MOCK_USERS = {
