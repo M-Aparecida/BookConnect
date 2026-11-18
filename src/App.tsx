@@ -1589,8 +1589,8 @@ export default function App() {
               if (profileData.name) savedName = profileData.name;
               if (profileData.bio) savedBio = profileData.bio;
               if (profileData.avatarUrl) {
-                savedAvatarUrl = `${profileData.avatarUrl}?t=${Date.now()}`;
-              }
+                savedAvatarUrl = profileData.avatarUrl;
+}
             }
           } catch (err) {
             console.log('Perfil ainda não salvo no DynamoDB, usando dados do Cognito.');
