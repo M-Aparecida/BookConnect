@@ -1293,6 +1293,7 @@ const ChatView = ({
       JSON.stringify({
         action: 'message',
         question,
+        userId: currentUser?.id,
       })
     );
   };
