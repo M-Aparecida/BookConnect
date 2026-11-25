@@ -18,6 +18,12 @@ import {
   Check,
   CheckCheck,
   AlertCircle,
+  ArrowLeft,
+  Sparkles,
+  Feather,
+  BookMarked,
+  Users,
+  Plus,
 } from 'lucide-react';
 
 import {
@@ -65,6 +71,15 @@ const GUEST_FAQ = [
   },
 ];
 
+const QUICK_SEARCH_SUGGESTIONS = [
+  'Dom Casmurro',
+  '1984',
+  'O Pequeno Príncipe',
+  'Harry Potter',
+  'Clarice Lispector',
+  'Machado de Assis',
+];
+
 // Utilitário para ignorar acentos e maiúsculas na busca
 const normalizeText = (text: string) =>
   text
@@ -77,20 +92,23 @@ const RatingStars = ({
   rating,
   interactive = false,
   onRate,
+  size,
 }: {
   rating: number;
   interactive?: boolean;
   onRate?: (rating: number) => void;
+  size?: number;
 }) => {
+  const starSize = size ?? (interactive ? 24 : 15);
   return (
-    <div className="flex text-yellow-400">
+    <div className="flex items-center gap-0.5">
       {[1, 2, 3, 4, 5].map((star) => (
         <Star
           key={star}
-          size={interactive ? 24 : 16}
+          size={starSize}
           fill={star <= rating ? 'currentColor' : 'none'}
           className={`${
-            star <= rating ? 'text-yellow-400' : 'text-gray-300'
+            star <= rating ? 'text-[#C28534]' : 'text-[#D8D1C5]'
           } ${
             interactive
               ? 'cursor-pointer hover:scale-110 transition-transform'
@@ -119,7 +137,7 @@ const AvatarDisplay = ({
       <img
         src={src}
         alt={alt || 'Avatar'}
-        className={`object-cover ${className || ''}`}
+        className={`object-cover shrink-0 ${className || ''}`}
         onClick={onClick}
       />
     );
@@ -128,7 +146,7 @@ const AvatarDisplay = ({
   return (
     <div
       onClick={onClick}
-      className={`flex items-center justify-center bg-indigo-100 text-indigo-600 font-bold uppercase overflow-hidden shrink-0 ${
+      className={`flex items-center justify-center bg-[#E9EFEA] text-[#1E3A2F] font-serif-display font-bold uppercase overflow-hidden shrink-0 ${
         className || ''
       }`}
     >
@@ -146,18 +164,20 @@ const ReviewText = ({
   compact?: boolean;
 }) => {
   const [expanded, setExpanded] = useState(false);
-  const maxChars = compact ? 180 : 240;
+  const maxChars = compact ? 180 : 260;
   const lineCount = text.split('\n').length;
   const isLong = text.length > maxChars || lineCount > 4;
+
+  const textClasses = compact
+    ? 'text-[#3A352F] text-sm leading-relaxed mt-2'
+    : 'text-[#2C2824] text-[15px] leading-7 font-normal';
 
   if (!isLong) {
     return (
       <p
-        className={`text-gray-800 ${
-          compact ? 'text-sm mt-2' : 'text-sm md:text-base italic'
-        } whitespace-pre-wrap break-words [overflow-wrap:anywhere]`}
+        className={`${textClasses} whitespace-pre-wrap break-words [overflow-wrap:anywhere]`}
       >
-        "{text}"
+        “{text}”
       </p>
     );
   }
@@ -165,31 +185,27 @@ const ReviewText = ({
   return (
     <div className={compact ? 'mt-2' : ''}>
       {expanded ? (
-        <div className="max-h-48 overflow-y-auto pr-2 rounded-md bg-white/70 border border-gray-200/80 p-2.5">
+        <div className="max-h-56 overflow-y-auto pr-2 rounded-xl bg-[#FBF9F5] border border-[#E7E2D8] p-3.5">
           <p
-            className={`text-gray-800 ${
-              compact ? 'text-sm' : 'text-sm md:text-base italic'
-            } whitespace-pre-wrap break-words [overflow-wrap:anywhere]`}
+            className={`${textClasses} whitespace-pre-wrap break-words [overflow-wrap:anywhere]`}
           >
-            "{text}"
+            “{text}”
           </p>
         </div>
       ) : (
         <p
-          className={`text-gray-800 ${
-            compact ? 'text-sm' : 'text-sm md:text-base italic'
-          } whitespace-pre-wrap break-words [overflow-wrap:anywhere]`}
+          className={`${textClasses} whitespace-pre-wrap break-words [overflow-wrap:anywhere]`}
         >
-          "{text.slice(0, maxChars).trimEnd()}..."
+          “{text.slice(0, maxChars).trimEnd()}...”
         </p>
       )}
 
       <button
         type="button"
         onClick={() => setExpanded((prev) => !prev)}
-        className="mt-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:underline focus:outline-none"
+        className="mt-2 text-xs font-semibold tracking-wide uppercase text-[#1E3A2F] hover:text-[#9A6220] transition-colors focus:outline-none"
       >
-        {expanded ? 'Mostrar menos' : 'Mostrar mais'}
+        {expanded ? 'Recolher leitura' : 'Continuar lendo'}
       </button>
     </div>
   );
@@ -197,7 +213,7 @@ const ReviewText = ({
 
 // --- COMPONENTES PRINCIPAIS ---
 
-// 1. HEADER (COM ÍCONE DE NOTIFICAÇÕES PARA USUÁRIOS LOGADOS)
+// 1. HEADER EDITORIAL + NAVEGAÇÃO INFERIOR MOBILE
 const Header = ({
   currentUser,
   currentView,
@@ -232,43 +248,60 @@ const Header = ({
     icon: any;
     label: string;
     badge?: number;
-  }) => (
-    <button
-      onClick={() => setView(view)}
-      className={`flex items-center space-x-1 px-3 py-2 rounded-md transition-colors relative ${
-        currentView === view
-          ? 'bg-indigo-100 text-indigo-700 font-medium'
-          : 'text-gray-600 hover:bg-gray-100'
-      }`}
-    >
-      <Icon size={18} />
-      <span>{label}</span>
-      {badge && badge > 0 ? (
-        <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-          {badge}
-        </span>
-      ) : null}
-    </button>
-  );
+  }) => {
+    const active = currentView === view;
+    return (
+      <button
+        onClick={() => setView(view)}
+        className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm transition-all relative ${
+          active
+            ? 'bg-[#1E3A2F] text-[#FBF9F5] font-medium shadow-sm'
+            : 'text-[#5C554C] hover:text-[#1E3A2F] hover:bg-[#EFECE4]'
+        }`}
+      >
+        <Icon size={16} />
+        <span>{label}</span>
+        {badge && badge > 0 ? (
+          <span
+            className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+              active
+                ? 'bg-[#C28534] text-white'
+                : 'bg-[#A63D2D] text-white'
+            }`}
+          >
+            {badge}
+          </span>
+        ) : null}
+      </button>
+    );
+  };
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
-      <div className="max-w-5xl mx-auto px-4">
-        <div className="flex justify-between h-16 items-center">
+    <header className="bg-[#FBF9F5]/90 backdrop-blur-md border-b border-[#E7E2D8] sticky top-0 z-50">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <div className="flex justify-between h-16 sm:h-[72px] items-center gap-4">
+          {/* Marca Editorial */}
           <div
-            className="flex items-center space-x-2 cursor-pointer"
+            className="flex items-center gap-2.5 cursor-pointer group"
             onClick={() => setView('feed')}
           >
-            <BookOpen className="h-8 w-8 text-indigo-600" />
-            <span className="text-xl font-bold text-gray-900">
-              BookConnect
-            </span>
+            <div className="w-9 h-9 rounded-xl bg-[#1E3A2F] text-[#FBF9F5] flex items-center justify-center shadow-sm group-hover:bg-[#284D3E] transition-colors">
+              <BookOpen className="h-5 w-5" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-serif-display text-2xl font-bold tracking-tight text-[#1F1C18] leading-none">
+                BookConnect
+              </span>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-[#8C8275] hidden sm:block mt-0.5">
+                Clube Literário
+              </span>
+            </div>
           </div>
 
-          <nav className="hidden md:flex space-x-4">
+          {/* Navegação Desktop */}
+          <nav className="hidden md:flex items-center gap-1 bg-[#F4F0E8] p-1 rounded-full border border-[#E7E2D8]">
             <NavButton view="feed" icon={BookOpen} label="Feed" />
-            <NavButton view="search" icon={Search} label="Buscar Livros" />
-
+            <NavButton view="search" icon={Search} label="Acervo" />
             {currentUser && (
               <NavButton
                 view="messages"
@@ -279,28 +312,29 @@ const Header = ({
             )}
           </nav>
 
-          <div className="flex items-center space-x-3">
+          {/* Ações do Usuário */}
+          <div className="flex items-center gap-2 sm:gap-3">
             {currentUser ? (
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 {/* Ícone de Notificações */}
                 <div className="relative">
                   <button
                     onClick={() => setShowNotifDropdown((prev) => !prev)}
-                    className="relative p-2 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded-full transition-colors"
+                    className="relative p-2.5 text-[#5C554C] hover:text-[#1E3A2F] hover:bg-[#EFECE4] rounded-full transition-colors"
                     title="Notificações"
                   >
-                    <Bell size={20} />
+                    <Bell size={19} />
                     {unreadCount > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                      <span className="absolute top-1 right-1 bg-[#A63D2D] text-white text-[10px] font-bold min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full ring-2 ring-[#FBF9F5]">
                         {unreadCount > 9 ? '9+' : unreadCount}
                       </span>
                     )}
                   </button>
 
                   {showNotifDropdown && (
-                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-50 overflow-hidden">
-                      <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                        <span className="font-semibold text-sm text-gray-800">
+                    <div className="fixed sm:absolute right-3 sm:right-0 left-3 sm:left-auto mt-2 sm:w-80 bg-white rounded-2xl shadow-xl border border-[#E7E2D8] z-50 overflow-hidden fade-in">
+                      <div className="px-4 py-3 border-b border-[#EFECE4] flex justify-between items-center bg-[#FBF9F5]">
+                        <span className="font-serif-display font-bold text-base text-[#1F1C18]">
                           Notificações
                         </span>
                         <div className="flex items-center gap-2">
@@ -308,25 +342,25 @@ const Header = ({
                             <button
                               type="button"
                               onClick={onMarkAllAsRead}
-                              className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                              className="flex items-center gap-1 text-xs text-[#1E3A2F] hover:text-[#9A6220] font-medium"
                               title="Marcar todas como lidas"
                             >
                               <CheckCheck size={14} />
-                              <span>Marcar todas</span>
+                              <span>Ler todas</span>
                             </button>
                           )}
                           <button
                             onClick={() => setShowNotifDropdown(false)}
-                            className="text-gray-400 hover:text-gray-600"
+                            className="text-[#8C8275] hover:text-[#1F1C18] p-1"
                           >
                             <X size={16} />
                           </button>
                         </div>
                       </div>
 
-                      <div className="max-h-72 overflow-y-auto divide-y divide-gray-100">
+                      <div className="max-h-72 overflow-y-auto divide-y divide-[#F4F0E8]">
                         {notifications.length === 0 ? (
-                          <div className="p-6 text-center text-sm text-gray-400">
+                          <div className="p-6 text-center text-sm text-[#8C8275]">
                             Nenhuma notificação no momento.
                           </div>
                         ) : (
@@ -337,8 +371,8 @@ const Header = ({
                                 setShowNotifDropdown(false);
                                 onOpenNotification(notif);
                               }}
-                              className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors flex items-start gap-3 cursor-pointer ${
-                                !notif.read ? 'bg-indigo-50/50' : ''
+                              className={`w-full text-left px-4 py-3 hover:bg-[#FBF9F5] transition-colors flex items-start gap-3 cursor-pointer ${
+                                !notif.read ? 'bg-[#F3F6F3]' : ''
                               }`}
                             >
                               <AvatarDisplay
@@ -346,24 +380,23 @@ const Header = ({
                                 className="w-8 h-8 rounded-full text-xs mt-0.5"
                               />
                               <div className="flex-1 min-w-0">
-                                <p className="text-xs text-gray-900">
+                                <p className="text-xs text-[#1F1C18]">
                                   <span className="font-semibold">
                                     {notif.fromName}
                                   </span>{' '}
                                   enviou uma mensagem:
                                 </p>
-                                <p className="text-xs text-gray-600 truncate mt-0.5">
-                                  "{notif.text}"
+                                <p className="text-xs text-[#5C554C] truncate mt-0.5">
+                                  “{notif.text}”
                                 </p>
-                                <span className="text-[10px] text-gray-400 mt-1 block">
+                                <span className="text-[10px] text-[#8C8275] mt-1 block">
                                   {notif.createdAt
-                                    ? new Date(notif.createdAt).toLocaleTimeString(
-                                        [],
-                                        {
-                                          hour: '2-digit',
-                                          minute: '2-digit',
-                                        }
-                                      )
+                                    ? new Date(
+                                        notif.createdAt
+                                      ).toLocaleTimeString([], {
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      })
                                     : ''}
                                 </span>
                               </div>
@@ -375,7 +408,7 @@ const Header = ({
                                     e.stopPropagation();
                                     onMarkAsRead(notif.id);
                                   }}
-                                  className="p-1 text-indigo-600 hover:bg-indigo-100 rounded-full shrink-0 mt-1 transition-colors"
+                                  className="p-1.5 text-[#1E3A2F] hover:bg-[#E1EAE4] rounded-full shrink-0 mt-0.5 transition-colors"
                                   title="Marcar como lida"
                                 >
                                   <Check size={14} />
@@ -389,34 +422,36 @@ const Header = ({
                   )}
                 </div>
 
-                <div
-                  className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 px-2 py-1 rounded-md transition-colors"
+                {/* Pill de Perfil */}
+                <button
+                  type="button"
+                  className="flex items-center gap-2 cursor-pointer bg-white hover:bg-[#F4F0E8] border border-[#E7E2D8] pl-1.5 pr-2 sm:pr-3 py-1 rounded-full transition-colors"
                   onClick={() => onUserClick(currentUser)}
                 >
                   <AvatarDisplay
                     src={currentUser.avatar}
                     alt={currentUser.name}
-                    className="w-8 h-8 rounded-full border border-gray-300"
+                    className="w-7 h-7 rounded-full border border-[#E7E2D8] text-xs"
                   />
-                  <span className="hidden sm:inline text-sm font-medium text-gray-700">
+                  <span className="hidden sm:inline text-sm font-medium text-[#2C2824]">
                     {currentUser.name.split(' ')[0]}
                   </span>
-                </div>
+                </button>
 
                 <button
                   onClick={handleLogout}
-                  className="text-gray-400 hover:text-red-600"
+                  className="p-2 text-[#8C8275] hover:text-[#A63D2D] hover:bg-[#FDF2F0] rounded-full transition-colors"
                   title="Sair"
                 >
-                  <LogOut size={20} />
+                  <LogOut size={18} />
                 </button>
               </div>
             ) : (
               <button
                 onClick={() => setView('auth')}
-                className="flex items-center space-x-1 bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700"
+                className="flex items-center gap-2 bg-[#1E3A2F] text-[#FBF9F5] px-4 sm:px-5 py-2 rounded-full text-sm font-medium hover:bg-[#284D3E] shadow-sm transition-all"
               >
-                <LogIn size={18} />
+                <LogIn size={16} />
                 <span>Entrar</span>
               </button>
             )}
@@ -424,6 +459,101 @@ const Header = ({
         </div>
       </div>
     </header>
+  );
+};
+
+// Barra de Navegação Inferior Exclusiva para Mobile (< md)
+const MobileBottomNav = ({
+  currentUser,
+  currentView,
+  setView,
+  onUserClick,
+  unreadCount,
+}: {
+  currentUser: any;
+  currentView: string;
+  setView: (view: string) => void;
+  onUserClick: (user: any) => void;
+  unreadCount: number;
+}) => {
+  const items = [
+    {
+      id: 'feed',
+      label: 'Feed',
+      icon: BookOpen,
+      onClick: () => setView('feed'),
+    },
+    {
+      id: 'search',
+      label: 'Acervo',
+      icon: Search,
+      onClick: () => setView('search'),
+    },
+    ...(currentUser
+      ? [
+          {
+            id: 'messages',
+            label: 'Mensagens',
+            icon: MessageCircle,
+            badge: unreadCount,
+            onClick: () => setView('messages'),
+          },
+          {
+            id: 'profile',
+            label: 'Perfil',
+            icon: User,
+            onClick: () => onUserClick(currentUser),
+          },
+        ]
+      : [
+          {
+            id: 'auth',
+            label: 'Entrar',
+            icon: LogIn,
+            onClick: () => setView('auth'),
+          },
+        ]),
+  ];
+
+  return (
+    <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#FBF9F5]/95 backdrop-blur-md border-t border-[#E7E2D8] px-2 py-1.5 shadow-[0_-4px_20px_rgba(31,28,24,0.06)]">
+      <div className="flex items-center justify-around max-w-md mx-auto">
+        {items.map((item) => {
+          const Icon = item.icon;
+          const active = currentView === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={item.onClick}
+              className={`relative flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all min-w-[64px] ${
+                active ? 'text-[#1E3A2F]' : 'text-[#8C8275]'
+              }`}
+            >
+              <div
+                className={`p-1.5 rounded-full transition-colors ${
+                  active ? 'bg-[#E9EFEA]' : ''
+                }`}
+              >
+                <Icon size={20} strokeWidth={active ? 2.3 : 1.8} />
+              </div>
+              <span
+                className={`text-[11px] mt-0.5 ${
+                  active ? 'font-semibold' : 'font-medium'
+                }`}
+              >
+                {item.label}
+              </span>
+              {'badge' in item && item.badge && item.badge > 0 ? (
+                <span className="absolute top-1 right-3 bg-[#A63D2D] text-white text-[9px] font-bold min-w-[15px] h-[15px] px-1 flex items-center justify-center rounded-full">
+                  {item.badge > 9 ? '9+' : item.badge}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 };
 
@@ -445,7 +575,10 @@ const ProfileView = ({
   onSaveProfile: (user: any) => void;
   onSendMessage: (user: any) => void;
   reviews: any[];
-  onEditReview: (reviewId: string, data: { rating: number; text: string }) => void;
+  onEditReview: (
+    reviewId: string,
+    data: { rating: number; text: string }
+  ) => void;
   onDeleteReview: (reviewId: string) => void;
   onBack: () => void;
   onShowToast: (text: string, type?: 'error' | 'success' | 'info') => void;
@@ -473,6 +606,19 @@ const ProfileView = ({
   const userReviews = reviews.filter(
     (review) => review.user.id === profileUser.id
   );
+
+  const totalLikesReceived = userReviews.reduce(
+    (acc, r) => acc + (r.likedBy?.length || 0),
+    0
+  );
+
+  const averageRating =
+    userReviews.length > 0
+      ? (
+          userReviews.reduce((acc, r) => acc + (r.rating || 0), 0) /
+          userReviews.length
+        ).toFixed(1)
+      : '—';
 
   const startEditingReview = (review: any) => {
     setEditingReviewId(review.id);
@@ -575,42 +721,66 @@ const ProfileView = ({
   };
 
   return (
-    <div className="max-w-3xl mx-auto py-8 px-4 fade-in">
+    <div className="max-w-4xl mx-auto py-6 sm:py-10 px-4 sm:px-6 fade-in">
       <button
         onClick={onBack}
-        className="text-indigo-600 mb-4 hover:underline flex items-center"
+        className="inline-flex items-center gap-2 text-sm font-medium text-[#5C554C] hover:text-[#1E3A2F] mb-5 transition-colors"
       >
-        &larr; Voltar
+        <ArrowLeft size={16} />
+        <span>Voltar ao Feed</span>
       </button>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
-        <div className="h-32 bg-gradient-to-r from-indigo-500 to-purple-600" />
+      {/* Cartão Ex-Libris do Leitor */}
+      <div className="bg-white rounded-3xl shadow-sm border border-[#E7E2D8] overflow-hidden mb-10">
+        <div className="h-32 sm:h-40 bg-gradient-to-br from-[#1E3A2F] via-[#244638] to-[#162C23] relative overflow-hidden">
+          <div
+            className="absolute inset-0 opacity-10"
+            style={{
+              backgroundImage:
+                'radial-gradient(#FBF9F5 1px, transparent 1px)',
+              backgroundSize: '20px 20px',
+            }}
+          />
+          <div className="absolute right-6 bottom-4 hidden sm:flex items-center gap-2 text-[#FBF9F5]/40 font-serif-display italic text-lg select-none">
+            <Feather size={16} />
+            <span>Ex Libris • BookConnect</span>
+          </div>
+        </div>
 
-        <div className="px-6 pb-6 relative">
-          <div className="flex justify-between items-end -mt-12 mb-4">
+        <div className="px-5 sm:px-8 pb-7 relative">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end -mt-12 sm:-mt-14 mb-5 gap-4">
             <AvatarDisplay
               src={isEditing ? avatar : profileUser.avatar}
               alt={profileUser.name}
-              className="w-24 h-24 rounded-full border-4 border-white bg-white shadow-sm text-4xl"
+              className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl border-4 border-white bg-white shadow-md text-4xl"
             />
 
-            <div className="flex space-x-2">
+            <div className="flex flex-wrap gap-2">
               {isOwnProfile ? (
                 isEditing ? (
-                  <button
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="flex items-center space-x-1 bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-700 disabled:opacity-60"
-                  >
-                    <Save size={16} />
-                    <span>{isSaving ? 'Salvando...' : 'Salvar'}</span>
-                  </button>
+                  <>
+                    <button
+                      onClick={() => setIsEditing(false)}
+                      disabled={isSaving}
+                      className="px-4 py-2 rounded-full text-sm font-medium text-[#5C554C] bg-[#F4F0E8] hover:bg-[#E7E2D8] transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      className="flex items-center gap-1.5 bg-[#1E3A2F] text-[#FBF9F5] px-5 py-2 rounded-full text-sm font-medium hover:bg-[#284D3E] disabled:opacity-60 shadow-sm transition-colors"
+                    >
+                      <Save size={15} />
+                      <span>{isSaving ? 'Salvando...' : 'Salvar Perfil'}</span>
+                    </button>
+                  </>
                 ) : (
                   <button
                     onClick={() => setIsEditing(true)}
-                    className="flex items-center space-x-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-200 border border-gray-300"
+                    className="flex items-center gap-1.5 bg-[#F4F0E8] text-[#2C2824] px-4 py-2 rounded-full text-sm font-medium hover:bg-[#E7E2D8] border border-[#E0D9CC] transition-colors"
                   >
-                    <Edit3 size={16} />
+                    <Edit3 size={15} />
                     <span>Editar Perfil</span>
                   </button>
                 )
@@ -618,7 +788,7 @@ const ProfileView = ({
                 currentUser && (
                   <button
                     onClick={() => onSendMessage(profileUser)}
-                    className="flex items-center space-x-1 bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700"
+                    className="flex items-center gap-2 bg-[#1E3A2F] text-[#FBF9F5] px-5 py-2.5 rounded-full text-sm font-medium hover:bg-[#284D3E] shadow-sm transition-colors"
                   >
                     <MessageCircle size={16} />
                     <span>Enviar Mensagem</span>
@@ -629,9 +799,9 @@ const ProfileView = ({
           </div>
 
           {isEditing ? (
-            <div className="space-y-4 pt-2">
+            <div className="space-y-4 pt-2 border-t border-[#F4F0E8]">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-[#5C554C] mb-2">
                   Foto de Perfil (S3)
                 </label>
 
@@ -639,7 +809,7 @@ const ProfileView = ({
                   type="file"
                   accept="image/jpeg, image/png"
                   onChange={handleImageUpload}
-                  className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 outline-none"
+                  className="w-full text-sm text-[#5C554C] file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[#E9EFEA] file:text-[#1E3A2F] hover:file:bg-[#DCE7DF] outline-none"
                 />
 
                 {avatar && (
@@ -649,95 +819,141 @@ const ProfileView = ({
                       setAvatar('');
                       setNewImageBase64(null);
                     }}
-                    className="text-xs text-red-500 mt-2 hover:underline"
+                    className="text-xs text-[#A63D2D] mt-2 hover:underline font-medium"
                   >
-                    Remover foto
+                    Remover foto atual
                   </button>
                 )}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nome Completo
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full border-gray-300 border rounded-md p-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-[#5C554C] mb-1.5">
+                    Nome Completo
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full border-[#DCD5C9] bg-[#FBF9F5] border rounded-xl px-3.5 py-2.5 text-sm focus:bg-white focus:ring-2 focus:ring-[#1E3A2F]/20 focus:border-[#1E3A2F] outline-none transition-all"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Biografia
+                <label className="block text-xs font-semibold uppercase tracking-wider text-[#5C554C] mb-1.5">
+                  Biografia Literária
                 </label>
                 <textarea
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   rows={3}
-                  className="w-full border-gray-300 border rounded-md p-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                  placeholder="Conte um pouco sobre você e o que gosta de ler..."
+                  className="w-full border-[#DCD5C9] bg-[#FBF9F5] border rounded-xl px-3.5 py-2.5 text-sm focus:bg-white focus:ring-2 focus:ring-[#1E3A2F]/20 focus:border-[#1E3A2F] outline-none transition-all"
+                  placeholder="Conte um pouco sobre você, seus autores favoritos e o que gosta de ler..."
                 />
               </div>
             </div>
           ) : (
-            <div className="pt-2">
-              <h1 className="text-2xl font-bold text-gray-900">
+            <div>
+              <h1 className="font-serif-display text-3xl sm:text-4xl font-bold text-[#1F1C18]">
                 {profileUser.name}
               </h1>
               {profileUser.email && (
-                <p className="text-sm text-gray-500">{profileUser.email}</p>
+                <p className="text-xs text-[#8C8275] mt-0.5">
+                  {profileUser.email}
+                </p>
               )}
-              <p className="text-gray-600 mt-2 whitespace-pre-wrap break-words">
+              <p className="text-[#4A443D] text-sm sm:text-base mt-3 leading-relaxed max-w-2xl whitespace-pre-wrap break-words">
                 {profileUser.bio || 'Nenhuma biografia informada.'}
               </p>
+
+              {/* Faixa de Estatísticas do Leitor */}
+              <div className="grid grid-cols-3 gap-3 sm:gap-6 mt-6 pt-6 border-t border-[#EFECE4] max-w-md">
+                <div>
+                  <span className="font-serif-display text-2xl font-bold text-[#1E3A2F] block">
+                    {userReviews.length}
+                  </span>
+                  <span className="text-[11px] uppercase tracking-wider text-[#8C8275]">
+                    Resenhas
+                  </span>
+                </div>
+                <div>
+                  <span className="font-serif-display text-2xl font-bold text-[#1E3A2F] block">
+                    {totalLikesReceived}
+                  </span>
+                  <span className="text-[11px] uppercase tracking-wider text-[#8C8275]">
+                    Curtidas
+                  </span>
+                </div>
+                <div>
+                  <span className="font-serif-display text-2xl font-bold text-[#C28534] block">
+                    {averageRating}
+                  </span>
+                  <span className="text-[11px] uppercase tracking-wider text-[#8C8275]">
+                    Nota Média
+                  </span>
+                </div>
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">
-        Resenhas de {profileUser.name.split(' ')[0]} ({userReviews.length})
-      </h3>
+      {/* Estante de Resenhas do Usuário */}
+      <div className="flex items-baseline justify-between mb-5 border-b border-[#E7E2D8] pb-3">
+        <h3 className="font-serif-display text-2xl font-bold text-[#1F1C18]">
+          Estante de {profileUser.name.split(' ')[0]}
+        </h3>
+        <span className="text-xs font-medium uppercase tracking-wider text-[#8C8275]">
+          {userReviews.length}{' '}
+          {userReviews.length === 1 ? 'publicação' : 'publicações'}
+        </span>
+      </div>
 
       {userReviews.length === 0 ? (
-        <p className="text-gray-500">
-          Este usuário ainda não publicou nenhuma resenha.
-        </p>
+        <div className="bg-white rounded-2xl border border-[#E7E2D8] p-10 text-center">
+          <BookMarked className="h-10 w-10 text-[#D0C8BC] mx-auto mb-3" />
+          <p className="text-[#5C554C] text-sm">
+            Este leitor ainda não publicou nenhuma resenha.
+          </p>
+        </div>
       ) : (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {userReviews.map((review) => {
             const isEditingThis = editingReviewId === review.id;
 
             return (
               <div
                 key={review.id}
-                className="bg-white p-4 rounded-xl border border-gray-200 flex gap-4 items-start shadow-sm"
+                className="bg-white p-5 rounded-2xl border border-[#E7E2D8] flex gap-4 items-start shadow-sm hover:shadow-md transition-shadow"
               >
                 <img
                   src={review.book.cover}
                   alt="Capa"
-                  className="w-16 h-24 object-cover rounded shadow-sm shrink-0"
+                  className="w-16 h-24 object-cover rounded-lg shadow-md border border-[#E7E2D8] shrink-0 bg-[#F4F0E8]"
                 />
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h4 className="font-bold text-gray-900">
+                    <div className="min-w-0">
+                      <h4 className="font-serif-display font-bold text-lg text-[#1F1C18] leading-snug line-clamp-2">
                         {review.book.title}
                       </h4>
-                      {!isEditingThis && <RatingStars rating={review.rating} />}
+                      {!isEditingThis && (
+                        <div className="mt-1">
+                          <RatingStars rating={review.rating} />
+                        </div>
+                      )}
                     </div>
 
                     {isOwnProfile && !isEditingThis && (
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={() => startEditingReview(review)}
-                          className="text-gray-400 hover:text-indigo-600 p-1 rounded transition-colors"
+                          className="text-[#8C8275] hover:text-[#1E3A2F] hover:bg-[#EFECE4] p-1.5 rounded-lg transition-colors"
                           title="Editar resenha"
                         >
-                          <Edit3 size={16} />
+                          <Edit3 size={15} />
                         </button>
                         <button
                           onClick={() =>
@@ -750,17 +966,17 @@ const ProfileView = ({
                               }
                             )
                           }
-                          className="text-gray-400 hover:text-red-600 p-1 rounded transition-colors"
+                          className="text-[#8C8275] hover:text-[#A63D2D] hover:bg-[#FDF2F0] p-1.5 rounded-lg transition-colors"
                           title="Excluir resenha"
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={15} />
                         </button>
                       </div>
                     )}
                   </div>
 
                   {isEditingThis ? (
-                    <div className="mt-2 space-y-3">
+                    <div className="mt-3 space-y-3">
                       <RatingStars
                         rating={editRating}
                         interactive
@@ -770,19 +986,19 @@ const ProfileView = ({
                         value={editText}
                         onChange={(e) => setEditText(e.target.value)}
                         rows={3}
-                        className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none"
+                        className="w-full border border-[#DCD5C9] bg-[#FBF9F5] rounded-xl p-2.5 text-sm focus:bg-white focus:ring-2 focus:ring-[#1E3A2F]/20 focus:border-[#1E3A2F] outline-none resize-none"
                       />
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => saveEditedReview(review.id)}
-                          className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded-md text-xs font-medium hover:bg-indigo-700"
+                          className="flex items-center gap-1 bg-[#1E3A2F] text-white px-3.5 py-1.5 rounded-full text-xs font-medium hover:bg-[#284D3E]"
                         >
-                          <Save size={14} />
+                          <Save size={13} />
                           <span>Salvar</span>
                         </button>
                         <button
                           onClick={cancelEditingReview}
-                          className="px-3 py-1.5 rounded-md text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200"
+                          className="px-3.5 py-1.5 rounded-full text-xs font-medium text-[#5C554C] bg-[#F4F0E8] hover:bg-[#E7E2D8]"
                         >
                           Cancelar
                         </button>
@@ -791,8 +1007,9 @@ const ProfileView = ({
                   ) : (
                     <>
                       <ReviewText text={review.text} compact />
-                      <span className="text-xs text-gray-400 mt-2 block">
-                        {new Date(review.createdAt).toLocaleDateString()}
+                      <span className="text-[11px] text-[#9A9083] mt-3 block">
+                        Publicado em{' '}
+                        {new Date(review.createdAt).toLocaleDateString('pt-BR')}
                       </span>
                     </>
                   )}
@@ -806,7 +1023,7 @@ const ProfileView = ({
   );
 };
 
-// 3. FEED E COMENTÁRIOS (COM BUSCA DE RESENHAS + EDITAR/APAGAR PRÓPRIA RESENHA + EXCLUSÃO DE COMENTÁRIOS + TOGGLE DE CURTIDA)
+// 3. FEED EDITORIAL (LAYOUT EM 2 COLUNAS NO DESKTOP + BUSCA + RESENHAS + COMENTÁRIOS)
 const FeedView = ({
   currentUser,
   reviews,
@@ -815,6 +1032,7 @@ const FeedView = ({
   onRequireAuth,
   onShowToast,
   onRequestConfirm,
+  onGoToSearch,
 }: {
   currentUser: any;
   reviews: any[];
@@ -827,6 +1045,7 @@ const FeedView = ({
     message: string,
     onConfirm: () => void
   ) => void;
+  onGoToSearch: () => void;
 }) => {
   const [feedSearch, setFeedSearch] = useState('');
   const [activeCommentReview, setActiveCommentReview] = useState<string | null>(
@@ -885,6 +1104,24 @@ const FeedView = ({
       })
     : reviews;
 
+  // Leitores ativos derivados apenas do estado atual de reviews (sem alterar backend)
+  const featuredReaders = React.useMemo(() => {
+    const map = new Map<string, { user: any; count: number }>();
+    reviews.forEach((r) => {
+      if (r.user?.id) {
+        const existing = map.get(r.user.id);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          map.set(r.user.id, { user: r.user, count: 1 });
+        }
+      }
+    });
+    return Array.from(map.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [reviews]);
+
   const submitComment = (reviewId: string) => {
     if (!currentUser || !commentText.trim()) return;
 
@@ -901,531 +1138,719 @@ const FeedView = ({
   };
 
   return (
-    <div className="max-w-2xl mx-auto py-8 px-4">
-      <div className="mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800">
-            Feed da Comunidade
-          </h2>
-
-          <p className="text-gray-600 text-sm mt-1.5 leading-relaxed">
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-600 font-bold text-base block mb-0.5">
-              ✨ Explore mundos infinitos.
-            </span>
-            Compartilhe suas resenhas, avalie suas obras favoritas e
-            conecte-se com mentes apaixonadas por literatura! 📚☕
+    <div className="max-w-6xl mx-auto py-6 sm:py-10 px-4 sm:px-6">
+      {/* Cabeçalho Editorial */}
+      <div className="mb-8 pb-6 border-b border-[#E7E2D8] flex flex-col md:flex-row md:items-end justify-between gap-5">
+        <div className="max-w-2xl">
+          <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9A6220] mb-2">
+            <Sparkles size={13} />
+            <span>Diário da Comunidade</span>
+          </div>
+          <h1 className="font-serif-display text-3xl sm:text-5xl font-bold text-[#1F1C18] tracking-tight leading-[1.1]">
+            Explore mundos infinitos através de novas leituras.
+          </h1>
+          <p className="text-[#5C554C] text-sm sm:text-base mt-2.5 leading-relaxed">
+            Compartilhe suas resenhas, avalie suas obras favoritas e conecte-se
+            com mentes apaixonadas por literatura.
           </p>
         </div>
 
-        {!currentUser && (
-          <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap mt-2 sm:mt-0">
-            Modo Visitante
-          </span>
-        )}
+        <div className="flex items-center gap-3 shrink-0">
+          {!currentUser && (
+            <span className="bg-[#F6EBD9] text-[#8A5618] border border-[#E9D5B5] px-3.5 py-1.5 rounded-full text-xs font-semibold">
+              Modo Visitante
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onGoToSearch}
+            className="inline-flex items-center gap-2 bg-[#1E3A2F] text-[#FBF9F5] px-5 py-2.5 rounded-full text-sm font-medium hover:bg-[#284D3E] shadow-sm transition-all"
+          >
+            <Plus size={16} />
+            <span>Nova Resenha</span>
+          </button>
+        </div>
       </div>
 
-      {/* Barra de Pesquisa de Resenhas (visível para visitantes e usuários logados) */}
-      <div className="mb-6">
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-gray-400" />
+      {/* Grade Assimétrica: Feed Principal + Sidebar Editorial */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Coluna Principal */}
+        <div className="lg:col-span-8">
+          {/* Barra de Pesquisa de Resenhas */}
+          <div className="mb-6">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-[#8C8275]" />
+              </div>
+
+              <input
+                type="text"
+                value={feedSearch}
+                onChange={(e) => setFeedSearch(e.target.value)}
+                placeholder="Pesquisar resenhas por título, autor ou leitor..."
+                className="w-full pl-11 pr-10 py-3 bg-white border border-[#E0D9CC] rounded-2xl text-sm text-[#1F1C18] placeholder-[#9A9083] shadow-sm focus:outline-none focus:ring-2 focus:ring-[#1E3A2F]/15 focus:border-[#1E3A2F] transition-all"
+              />
+
+              {feedSearch && (
+                <button
+                  type="button"
+                  onClick={() => setFeedSearch('')}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-[#8C8275] hover:text-[#1F1C18]"
+                  title="Limpar pesquisa"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+
+            {feedSearch.trim() && (
+              <div className="mt-2.5 flex items-center justify-between text-xs text-[#6E665C] px-1">
+                <span>
+                  {filteredReviews.length === 0
+                    ? `Nenhuma resenha encontrada para "${feedSearch.trim()}"`
+                    : filteredReviews.length === 1
+                    ? `1 resenha encontrada para "${feedSearch.trim()}"`
+                    : `${filteredReviews.length} resenhas encontradas para "${feedSearch.trim()}"`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFeedSearch('')}
+                  className="text-[#1E3A2F] hover:underline font-semibold"
+                >
+                  Limpar filtro
+                </button>
+              </div>
+            )}
           </div>
 
-          <input
-            type="text"
-            value={feedSearch}
-            onChange={(e) => setFeedSearch(e.target.value)}
-            placeholder="Pesquisar resenhas por livro, autor ou leitor..."
-            className="w-full pl-10 pr-10 py-2.5 bg-white border border-gray-300 rounded-xl text-sm text-gray-800 placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-          />
+          {filteredReviews.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-[#E7E2D8] p-12 text-center shadow-sm fade-in">
+              <BookOpen className="h-11 w-11 text-[#D0C8BC] mx-auto mb-3" />
+              <p className="font-serif-display text-xl font-bold text-[#1F1C18]">
+                {feedSearch.trim()
+                  ? 'Nenhuma resenha encontrada'
+                  : 'O diário ainda está em branco'}
+              </p>
+              <p className="text-sm text-[#6E665C] mt-1.5 max-w-sm mx-auto">
+                {feedSearch.trim()
+                  ? 'Tente buscar por outro título, autor ou limpe a pesquisa para ver todo o feed.'
+                  : 'Explore o acervo de livros para ser o primeiro a publicar uma resenha literária.'}
+              </p>
+              {feedSearch ? (
+                <button
+                  type="button"
+                  onClick={() => setFeedSearch('')}
+                  className="mt-5 bg-[#E9EFEA] text-[#1E3A2F] px-5 py-2 rounded-full text-sm font-medium hover:bg-[#DCE7DF] transition-colors"
+                >
+                  Ver todas as resenhas
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onGoToSearch}
+                  className="mt-5 bg-[#1E3A2F] text-[#FBF9F5] px-5 py-2.5 rounded-full text-sm font-medium hover:bg-[#284D3E] transition-colors"
+                >
+                  Explorar Acervo
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {filteredReviews.map((review) => {
+                const hasLikedReview =
+                  currentUser && review.likedBy.includes(currentUser.id);
+                const isOwnReview =
+                  currentUser && review.user.id === currentUser.id;
+                const isEditingThis = editingReviewId === review.id;
 
-          {feedSearch && (
-            <button
-              type="button"
-              onClick={() => setFeedSearch('')}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
-              title="Limpar pesquisa"
-            >
-              <X size={16} />
-            </button>
-          )}
-        </div>
+                return (
+                  <article
+                    key={review.id}
+                    className="bg-white rounded-3xl shadow-sm border border-[#E7E2D8] overflow-hidden hover:border-[#D8D0C2] transition-all fade-in"
+                  >
+                    <div className="p-5 sm:p-7">
+                      {/* Cabeçalho do Card */}
+                      <div className="flex items-center justify-between gap-3 mb-5">
+                        <div
+                          className="flex items-center gap-3 cursor-pointer group min-w-0"
+                          onClick={() => onUserClick(review.user)}
+                        >
+                          <AvatarDisplay
+                            src={review.user.avatar}
+                            alt={review.user.name}
+                            className="w-10 h-10 rounded-full border border-[#E7E2D8] group-hover:ring-2 group-hover:ring-[#1E3A2F]/20 transition-all"
+                          />
 
-        {feedSearch.trim() && (
-          <div className="mt-2 flex items-center justify-between text-xs text-gray-500 px-1">
-            <span>
-              {filteredReviews.length === 0
-                ? `Nenhuma resenha encontrada para "${feedSearch.trim()}"`
-                : filteredReviews.length === 1
-                ? `1 resenha encontrada para "${feedSearch.trim()}"`
-                : `${filteredReviews.length} resenhas encontradas para "${feedSearch.trim()}"`}
-            </span>
-            <button
-              type="button"
-              onClick={() => setFeedSearch('')}
-              className="text-indigo-600 hover:underline font-medium"
-            >
-              Limpar filtro
-            </button>
-          </div>
-        )}
-      </div>
+                          <div className="min-w-0">
+                            <h4 className="font-semibold text-sm text-[#1F1C18] group-hover:text-[#1E3A2F] transition-colors truncate">
+                              {review.user.name}
+                            </h4>
+                            <span className="text-xs text-[#8C8275] block">
+                              Publicou uma resenha
+                              {review.createdAt
+                                ? ` • ${new Date(
+                                    review.createdAt
+                                  ).toLocaleDateString('pt-BR')}`
+                                : ''}
+                            </span>
+                          </div>
+                        </div>
 
-      {filteredReviews.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center shadow-sm fade-in">
-          <BookOpen className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-700 font-medium">
-            {feedSearch.trim()
-              ? 'Nenhuma resenha encontrada para esse livro.'
-              : 'Nenhuma resenha publicada ainda.'}
-          </p>
-          <p className="text-xs text-gray-500 mt-1">
-            {feedSearch.trim()
-              ? 'Tente buscar por outro título, autor ou limpe a pesquisa para ver todo o feed.'
-              : 'Acesse "Buscar Livros" para ser o primeiro a publicar uma resenha!'}
-          </p>
-          {feedSearch && (
-            <button
-              type="button"
-              onClick={() => setFeedSearch('')}
-              className="mt-4 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-100 transition-colors"
-            >
-              Ver todas as resenhas
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {filteredReviews.map((review) => {
-            const hasLikedReview =
-              currentUser && review.likedBy.includes(currentUser.id);
-            const isOwnReview =
-              currentUser && review.user.id === currentUser.id;
-            const isEditingThis = editingReviewId === review.id;
+                        <div className="flex items-center gap-2 shrink-0">
+                          {!isEditingThis && (
+                            <div className="bg-[#FBF9F5] border border-[#EFECE4] px-2.5 py-1 rounded-full">
+                              <RatingStars rating={review.rating} />
+                            </div>
+                          )}
 
-            return (
-              <div
-                key={review.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden fade-in"
-              >
-                <div className="p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <div
-                      className="flex items-center space-x-3 cursor-pointer group"
-                      onClick={() => onUserClick(review.user)}
-                    >
-                      <AvatarDisplay
-                        src={review.user.avatar}
-                        alt={review.user.name}
-                        className="w-10 h-10 rounded-full group-hover:opacity-80 transition-opacity"
-                      />
+                          {isOwnReview && !isEditingThis && (
+                            <div className="flex items-center gap-1 pl-1">
+                              <button
+                                onClick={() => startEditingReview(review)}
+                                className="p-1.5 text-[#8C8275] hover:text-[#1E3A2F] hover:bg-[#EFECE4] rounded-full transition-colors"
+                                title="Editar resenha"
+                              >
+                                <Edit3 size={15} />
+                              </button>
+                              <button
+                                onClick={() =>
+                                  onRequestConfirm(
+                                    'Excluir resenha',
+                                    'Tem certeza que deseja excluir esta resenha?',
+                                    () => {
+                                      actions.onDeleteReview(review.id);
+                                      onShowToast('Resenha excluída.', 'info');
+                                    }
+                                  )
+                                }
+                                className="p-1.5 text-[#8C8275] hover:text-[#A63D2D] hover:bg-[#FDF2F0] rounded-full transition-colors"
+                                title="Excluir resenha"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
 
-                      <div>
-                        <h4 className="font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
-                          {review.user.name}
-                        </h4>
-                        <span className="text-xs text-gray-500">
-                          Avaliou um livro
-                        </span>
+                      {/* Corpo Literário: Capa + Texto */}
+                      <div className="flex flex-col sm:flex-row gap-5 mb-5 bg-[#FBF9F5] border border-[#EFECE4] p-4 sm:p-5 rounded-2xl">
+                        <div className="flex sm:block justify-center shrink-0">
+                          <img
+                            src={review.book.cover}
+                            alt={review.book.title}
+                            className="w-24 h-36 sm:w-24 sm:h-36 object-cover rounded-lg shadow-[4px_6px_16px_rgba(31,28,24,0.14)] border border-[#E7E2D8] bg-white"
+                          />
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-serif-display font-bold text-2xl text-[#1F1C18] leading-tight">
+                            {review.book.title}
+                          </h3>
+                          <p className="text-xs uppercase tracking-wider font-medium text-[#8C8275] mt-1 mb-3">
+                            por {review.book.author}
+                          </p>
+
+                          {isEditingThis ? (
+                            <div className="space-y-3 mt-2">
+                              <div>
+                                <span className="text-xs text-[#6E665C] block mb-1">
+                                  Alterar nota:
+                                </span>
+                                <RatingStars
+                                  rating={editRating}
+                                  interactive
+                                  onRate={setEditRating}
+                                />
+                              </div>
+                              <textarea
+                                value={editText}
+                                onChange={(e) => setEditText(e.target.value)}
+                                rows={3}
+                                className="w-full bg-white border border-[#DCD5C9] rounded-xl p-3 text-sm focus:ring-2 focus:ring-[#1E3A2F]/20 focus:border-[#1E3A2F] outline-none resize-none"
+                              />
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => saveEditedReview(review.id)}
+                                  className="flex items-center gap-1.5 bg-[#1E3A2F] text-white px-4 py-1.5 rounded-full text-xs font-medium hover:bg-[#284D3E]"
+                                >
+                                  <Save size={13} />
+                                  <span>Salvar alterações</span>
+                                </button>
+                                <button
+                                  onClick={cancelEditingReview}
+                                  className="px-4 py-1.5 rounded-full text-xs font-medium text-[#5C554C] bg-white border border-[#DCD5C9] hover:bg-[#F4F0E8]"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <ReviewText text={review.text} />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Barra de Interações */}
+                      <div className="flex items-center justify-between pt-3 border-t border-[#F4F0E8]">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              if (!currentUser) {
+                                onRequireAuth();
+                                return;
+                              }
+                              actions.onToggleLikeReview(review.id);
+                            }}
+                            title={
+                              !currentUser
+                                ? 'Faça login para curtir'
+                                : hasLikedReview
+                                ? 'Remover curtida'
+                                : 'Curtir resenha'
+                            }
+                            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium transition-all cursor-pointer ${
+                              hasLikedReview
+                                ? 'bg-[#FDF2F0] text-[#A63D2D]'
+                                : 'text-[#5C554C] hover:bg-[#F4F0E8] hover:text-[#A63D2D]'
+                            }`}
+                          >
+                            <Heart
+                              size={17}
+                              fill={hasLikedReview ? 'currentColor' : 'none'}
+                            />
+                            <span>{review.likedBy.length}</span>
+                          </button>
+
+                          <button
+                            onClick={() =>
+                              setActiveCommentReview(
+                                activeCommentReview === review.id
+                                  ? null
+                                  : review.id
+                              )
+                            }
+                            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium transition-all ${
+                              activeCommentReview === review.id
+                                ? 'bg-[#E9EFEA] text-[#1E3A2F]'
+                                : 'text-[#5C554C] hover:bg-[#F4F0E8] hover:text-[#1E3A2F]'
+                            }`}
+                          >
+                            <MessageCircle size={17} />
+                            <span>
+                              {review.comments.length}{' '}
+                              <span className="hidden sm:inline">
+                                {review.comments.length === 1
+                                  ? 'comentário'
+                                  : 'comentários'}
+                              </span>
+                            </span>
+                          </button>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      {!isEditingThis && <RatingStars rating={review.rating} />}
+                    {/* Seção de Comentários */}
+                    {activeCommentReview === review.id && (
+                      <div className="bg-[#FBF9F5] px-5 sm:px-7 py-5 border-t border-[#EFECE4]">
+                        <div className="space-y-4 mb-4">
+                          {review.comments.length === 0 && (
+                            <p className="text-xs text-[#8C8275] italic text-center py-2">
+                              Nenhum comentário ainda. Inicie a conversa sobre
+                              esta obra!
+                            </p>
+                          )}
 
-                      {isOwnReview && !isEditingThis && (
-                        <div className="flex items-center gap-1 border-l border-gray-200 pl-2">
-                          <button
-                            onClick={() => startEditingReview(review)}
-                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
-                            title="Editar resenha"
-                          >
-                            <Edit3 size={16} />
-                          </button>
-                          <button
-                            onClick={() =>
-                              onRequestConfirm(
-                                'Excluir resenha',
-                                'Tem certeza que deseja excluir esta resenha?',
-                                () => {
-                                  actions.onDeleteReview(review.id);
-                                  onShowToast('Resenha excluída.', 'info');
-                                }
-                              )
-                            }
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                            title="Excluir resenha"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                          {review.comments.map((comment: any) => {
+                            const hasLikedComment =
+                              currentUser &&
+                              comment.likedBy.includes(currentUser.id);
 
-                  <div className="flex flex-col sm:flex-row gap-4 mb-4 bg-gray-50 p-3 rounded-lg">
-                    <img
-                      src={review.book.cover}
-                      alt={review.book.title}
-                      className="w-20 h-32 object-cover rounded shadow-sm flex-shrink-0 bg-white"
-                    />
+                            const isReplying =
+                              currentUser &&
+                              replyingTo?.commentId === comment.id;
 
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-lg text-gray-900 leading-tight">
-                        {review.book.title}
-                      </h3>
-                      <p className="text-sm text-gray-600 mb-2">
-                        por {review.book.author}
-                      </p>
+                            const canDeleteComment =
+                              currentUser &&
+                              (comment.user.id === currentUser.id ||
+                                review.user.id === currentUser.id);
 
-                      {isEditingThis ? (
-                        <div className="space-y-3 mt-2">
-                          <div>
-                            <span className="text-xs text-gray-500 block mb-1">
-                              Alterar nota:
-                            </span>
-                            <RatingStars
-                              rating={editRating}
-                              interactive
-                              onRate={setEditRating}
-                            />
-                          </div>
-                          <textarea
-                            value={editText}
-                            onChange={(e) => setEditText(e.target.value)}
-                            rows={3}
-                            className="w-full bg-white border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none"
-                          />
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => saveEditedReview(review.id)}
-                              className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded-md text-xs font-medium hover:bg-indigo-700"
-                            >
-                              <Save size={14} />
-                              <span>Salvar alterações</span>
-                            </button>
-                            <button
-                              onClick={cancelEditingReview}
-                              className="px-3 py-1.5 rounded-md text-xs font-medium text-gray-600 bg-white border border-gray-300 hover:bg-gray-100"
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <ReviewText text={review.text} />
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center pt-3 border-t border-gray-100 space-x-6">
-                    <button
-                      onClick={() => {
-                        if (!currentUser) {
-                          onRequireAuth();
-                          return;
-                        }
-                        actions.onToggleLikeReview(review.id);
-                      }}
-                      title={
-                        !currentUser
-                          ? 'Faça login para curtir'
-                          : hasLikedReview
-                          ? 'Remover curtida'
-                          : 'Curtir resenha'
-                      }
-                      className={`flex items-center space-x-1.5 transition-colors cursor-pointer ${
-                        hasLikedReview
-                          ? 'text-red-500'
-                          : 'text-gray-500 hover:text-red-500'
-                      }`}
-                    >
-                      <Heart
-                        size={20}
-                        fill={hasLikedReview ? 'currentColor' : 'none'}
-                      />
-                      <span className="font-medium text-sm">
-                        {review.likedBy.length}
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() =>
-                        setActiveCommentReview(
-                          activeCommentReview === review.id ? null : review.id
-                        )
-                      }
-                      className="flex items-center space-x-1.5 text-gray-500 hover:text-indigo-500 transition-colors"
-                    >
-                      <MessageCircle size={20} />
-                      <span className="font-medium text-sm">
-                        {review.comments.length}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
-                {activeCommentReview === review.id && (
-                  <div className="bg-gray-50 px-5 py-4 border-t border-gray-100">
-                    <div className="space-y-4 mb-4">
-                      {review.comments.map((comment: any) => {
-                        const hasLikedComment =
-                          currentUser &&
-                          comment.likedBy.includes(currentUser.id);
-
-                        const isReplying =
-                          currentUser && replyingTo?.commentId === comment.id;
-
-                        const canDeleteComment =
-                          currentUser &&
-                          (comment.user.id === currentUser.id ||
-                            review.user.id === currentUser.id);
-
-                        return (
-                          <div key={comment.id} className="text-sm">
-                            <div className="flex items-start gap-2">
-                              <AvatarDisplay
-                                src={comment.user.avatar}
-                                alt={comment.user.name}
-                                className="w-8 h-8 rounded-full cursor-pointer"
-                                onClick={() => onUserClick(comment.user)}
-                              />
-
-                              <div className="flex-1 min-w-0">
-                                <div className="bg-white p-2.5 rounded-lg border border-gray-200 shadow-sm inline-block min-w-full sm:min-w-[60%] max-w-full">
-                                  <span
-                                    className="font-semibold text-gray-900 cursor-pointer hover:underline"
+                            return (
+                              <div key={comment.id} className="text-sm">
+                                <div className="flex items-start gap-2.5">
+                                  <AvatarDisplay
+                                    src={comment.user.avatar}
+                                    alt={comment.user.name}
+                                    className="w-8 h-8 rounded-full cursor-pointer border border-[#E7E2D8]"
                                     onClick={() => onUserClick(comment.user)}
-                                  >
-                                    {comment.user.name}
-                                  </span>
+                                  />
 
-                                  <p className="text-gray-800 mt-0.5 break-words [overflow-wrap:anywhere]">
-                                    {comment.text}
-                                  </p>
-                                </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="bg-white p-3 rounded-2xl border border-[#E7E2D8] shadow-2xs inline-block min-w-[60%] max-w-full">
+                                      <span
+                                        className="font-semibold text-xs text-[#1F1C18] cursor-pointer hover:text-[#1E3A2F]"
+                                        onClick={() =>
+                                          onUserClick(comment.user)
+                                        }
+                                      >
+                                        {comment.user.name}
+                                      </span>
 
-                                <div className="flex items-center gap-3 mt-1 ml-1 text-xs text-gray-500 font-medium">
-                                  <button
-                                    onClick={() => {
-                                      if (!currentUser) {
-                                        onRequireAuth();
-                                        return;
-                                      }
-                                      actions.onToggleLikeComment(
-                                        review.id,
-                                        comment.id
-                                      );
-                                    }}
-                                    className={`${
-                                      hasLikedComment
-                                        ? 'text-red-500'
-                                        : 'hover:text-gray-800'
-                                    }`}
-                                  >
-                                    {hasLikedComment ? 'Curtiu' : 'Curtir'} (
-                                    {comment.likedBy.length})
-                                  </button>
+                                      <p className="text-[#3A352F] text-sm mt-0.5 break-words [overflow-wrap:anywhere]">
+                                        {comment.text}
+                                      </p>
+                                    </div>
 
-                                  <button
-                                    onClick={() => {
-                                      if (!currentUser) {
-                                        onRequireAuth();
-                                        return;
-                                      }
-                                      setReplyingTo({
-                                        reviewId: review.id,
-                                        commentId: comment.id,
-                                      });
-                                    }}
-                                    className="hover:text-gray-800"
-                                  >
-                                    Responder
-                                  </button>
+                                    <div className="flex items-center gap-3.5 mt-1.5 ml-2 text-xs text-[#8C8275] font-medium">
+                                      <button
+                                        onClick={() => {
+                                          if (!currentUser) {
+                                            onRequireAuth();
+                                            return;
+                                          }
+                                          actions.onToggleLikeComment(
+                                            review.id,
+                                            comment.id
+                                          );
+                                        }}
+                                        className={`${
+                                          hasLikedComment
+                                            ? 'text-[#A63D2D]'
+                                            : 'hover:text-[#1F1C18]'
+                                        }`}
+                                      >
+                                        {hasLikedComment ? 'Curtiu' : 'Curtir'}{' '}
+                                        ({comment.likedBy.length})
+                                      </button>
 
-                                  {canDeleteComment && (
-                                    <button
-                                      onClick={() =>
-                                        actions.onDeleteComment(
-                                          review.id,
-                                          comment.id
-                                        )
-                                      }
-                                      className="flex items-center gap-1 text-gray-400 hover:text-red-600 transition-colors"
-                                      title="Excluir comentário"
-                                    >
-                                      <Trash2 size={12} />
-                                      <span>Excluir</span>
-                                    </button>
-                                  )}
-                                </div>
+                                      <button
+                                        onClick={() => {
+                                          if (!currentUser) {
+                                            onRequireAuth();
+                                            return;
+                                          }
+                                          setReplyingTo({
+                                            reviewId: review.id,
+                                            commentId: comment.id,
+                                          });
+                                        }}
+                                        className="hover:text-[#1F1C18]"
+                                      >
+                                        Responder
+                                      </button>
 
-                                {comment.replies.length > 0 && (
-                                  <div className="mt-3 space-y-3 pl-4 border-l-2 border-gray-200">
-                                    {comment.replies.map((reply: any) => {
-                                      const hasLikedReply =
-                                        currentUser &&
-                                        reply.likedBy.includes(currentUser.id);
-
-                                      const canDeleteReply =
-                                        currentUser &&
-                                        (reply.user.id === currentUser.id ||
-                                          review.user.id === currentUser.id);
-
-                                      return (
-                                        <div
-                                          key={reply.id}
-                                          className="flex items-start gap-2"
+                                      {canDeleteComment && (
+                                        <button
+                                          onClick={() =>
+                                            actions.onDeleteComment(
+                                              review.id,
+                                              comment.id
+                                            )
+                                          }
+                                          className="flex items-center gap-1 text-[#9A9083] hover:text-[#A63D2D] transition-colors"
+                                          title="Excluir comentário"
                                         >
-                                          <AvatarDisplay
-                                            src={reply.user.avatar}
-                                            alt={reply.user.name}
-                                            className="w-6 h-6 rounded-full cursor-pointer text-[10px]"
-                                            onClick={() =>
-                                              onUserClick(reply.user)
-                                            }
-                                          />
+                                          <Trash2 size={12} />
+                                          <span>Excluir</span>
+                                        </button>
+                                      )}
+                                    </div>
 
-                                          <div className="min-w-0">
-                                            <div className="bg-gray-100 p-2 rounded-lg border border-gray-200 inline-block max-w-full">
-                                              <span
-                                                className="font-semibold text-gray-900 text-xs cursor-pointer hover:underline"
+                                    {comment.replies.length > 0 && (
+                                      <div className="mt-3 space-y-3 pl-4 border-l-2 border-[#E0D9CC]">
+                                        {comment.replies.map((reply: any) => {
+                                          const hasLikedReply =
+                                            currentUser &&
+                                            reply.likedBy.includes(
+                                              currentUser.id
+                                            );
+
+                                          const canDeleteReply =
+                                            currentUser &&
+                                            (reply.user.id === currentUser.id ||
+                                              review.user.id ===
+                                                currentUser.id);
+
+                                          return (
+                                            <div
+                                              key={reply.id}
+                                              className="flex items-start gap-2"
+                                            >
+                                              <AvatarDisplay
+                                                src={reply.user.avatar}
+                                                alt={reply.user.name}
+                                                className="w-6 h-6 rounded-full cursor-pointer text-[10px] border border-[#E7E2D8]"
                                                 onClick={() =>
                                                   onUserClick(reply.user)
                                                 }
-                                              >
-                                                {reply.user.name}
-                                              </span>
+                                              />
 
-                                              <p className="text-gray-800 mt-0.5 break-words [overflow-wrap:anywhere]">
-                                                {reply.text}
-                                              </p>
+                                              <div className="min-w-0">
+                                                <div className="bg-[#F4F0E8] p-2.5 rounded-2xl border border-[#E7E2D8] inline-block max-w-full">
+                                                  <span
+                                                    className="font-semibold text-[#1F1C18] text-xs cursor-pointer hover:text-[#1E3A2F]"
+                                                    onClick={() =>
+                                                      onUserClick(reply.user)
+                                                    }
+                                                  >
+                                                    {reply.user.name}
+                                                  </span>
+
+                                                  <p className="text-[#3A352F] text-xs sm:text-sm mt-0.5 break-words [overflow-wrap:anywhere]">
+                                                    {reply.text}
+                                                  </p>
+                                                </div>
+
+                                                <div className="flex items-center gap-3 mt-1 ml-1.5 text-[11px] text-[#8C8275] font-medium">
+                                                  <button
+                                                    onClick={() => {
+                                                      if (!currentUser) {
+                                                        onRequireAuth();
+                                                        return;
+                                                      }
+                                                      actions.onToggleLikeReply(
+                                                        review.id,
+                                                        comment.id,
+                                                        reply.id
+                                                      );
+                                                    }}
+                                                    className={`${
+                                                      hasLikedReply
+                                                        ? 'text-[#A63D2D]'
+                                                        : 'hover:text-[#1F1C18]'
+                                                    }`}
+                                                  >
+                                                    {hasLikedReply
+                                                      ? 'Curtiu'
+                                                      : 'Curtir'}{' '}
+                                                    ({reply.likedBy.length})
+                                                  </button>
+
+                                                  {canDeleteReply && (
+                                                    <button
+                                                      onClick={() =>
+                                                        actions.onDeleteReply(
+                                                          review.id,
+                                                          comment.id,
+                                                          reply.id
+                                                        )
+                                                      }
+                                                      className="flex items-center gap-1 text-[#9A9083] hover:text-[#A63D2D] transition-colors"
+                                                      title="Excluir resposta"
+                                                    >
+                                                      <Trash2 size={11} />
+                                                      <span>Excluir</span>
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              </div>
                                             </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
 
-                                            <div className="flex items-center gap-3 mt-1 ml-1 text-[11px] text-gray-500 font-medium">
-                                              <button
-                                                onClick={() => {
-                                                  if (!currentUser) {
-                                                    onRequireAuth();
-                                                    return;
-                                                  }
-                                                  actions.onToggleLikeReply(
-                                                    review.id,
-                                                    comment.id,
-                                                    reply.id
-                                                  );
-                                                }}
-                                                className={`${
-                                                  hasLikedReply
-                                                    ? 'text-red-500'
-                                                    : 'hover:text-gray-800'
-                                                }`}
-                                              >
-                                                {hasLikedReply
-                                                  ? 'Curtiu'
-                                                  : 'Curtir'}{' '}
-                                                ({reply.likedBy.length})
-                                              </button>
+                                    {isReplying && (
+                                      <div className="mt-3 pl-4 flex gap-2">
+                                        <input
+                                          type="text"
+                                          value={replyText}
+                                          onChange={(e) =>
+                                            setReplyText(e.target.value)
+                                          }
+                                          placeholder={`Respondendo a ${comment.user.name}...`}
+                                          className="flex-1 text-sm rounded-full border-[#DCD5C9] px-3.5 py-1.5 focus:border-[#1E3A2F] focus:ring-2 focus:ring-[#1E3A2F]/15 outline-none bg-white border"
+                                          onKeyDown={(e) =>
+                                            e.key === 'Enter' &&
+                                            submitReply(review.id, comment.id)
+                                          }
+                                        />
 
-                                              {canDeleteReply && (
-                                                <button
-                                                  onClick={() =>
-                                                    actions.onDeleteReply(
-                                                      review.id,
-                                                      comment.id,
-                                                      reply.id
-                                                    )
-                                                  }
-                                                  className="flex items-center gap-1 text-gray-400 hover:text-red-600 transition-colors"
-                                                  title="Excluir resposta"
-                                                >
-                                                  <Trash2 size={11} />
-                                                  <span>Excluir</span>
-                                                </button>
-                                              )}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
+                                        <button
+                                          onClick={() =>
+                                            submitReply(review.id, comment.id)
+                                          }
+                                          className="bg-[#1E3A2F] text-white rounded-full p-2 hover:bg-[#284D3E]"
+                                        >
+                                          <Send size={14} />
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
-                                )}
-
-                                {isReplying && (
-                                  <div className="mt-3 pl-4 flex gap-2">
-                                    <input
-                                      type="text"
-                                      value={replyText}
-                                      onChange={(e) =>
-                                        setReplyText(e.target.value)
-                                      }
-                                      placeholder={`Respondendo a ${comment.user.name}...`}
-                                      className="flex-1 text-sm rounded-full border-gray-300 px-3 py-1.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-white border shadow-sm"
-                                      onKeyDown={(e) =>
-                                        e.key === 'Enter' &&
-                                        submitReply(review.id, comment.id)
-                                      }
-                                    />
-
-                                    <button
-                                      onClick={() =>
-                                        submitReply(review.id, comment.id)
-                                      }
-                                      className="bg-indigo-600 text-white rounded-full p-1.5 hover:bg-indigo-700"
-                                    >
-                                      <Send size={14} />
-                                    </button>
-                                  </div>
-                                )}
+                                </div>
                               </div>
-                            </div>
+                            );
+                          })}
+                        </div>
+
+                        {currentUser ? (
+                          <div className="flex gap-2.5 items-center mt-4 pt-3 border-t border-[#EFECE4]">
+                            <AvatarDisplay
+                              src={currentUser.avatar}
+                              alt={currentUser.name}
+                              className="w-8 h-8 rounded-full border border-[#E7E2D8]"
+                            />
+
+                            <input
+                              type="text"
+                              value={commentText}
+                              onChange={(e) => setCommentText(e.target.value)}
+                              placeholder="Escreva um comentário..."
+                              className="flex-1 rounded-full bg-white border-[#DCD5C9] border px-4 py-2 text-sm focus:border-[#1E3A2F] focus:ring-2 focus:ring-[#1E3A2F]/15 outline-none"
+                              onKeyDown={(e) =>
+                                e.key === 'Enter' && submitComment(review.id)
+                              }
+                            />
+
+                            <button
+                              onClick={() => submitComment(review.id)}
+                              className="bg-[#1E3A2F] text-white p-2.5 rounded-full hover:bg-[#284D3E] shadow-sm transition-colors"
+                            >
+                              <Send size={15} />
+                            </button>
                           </div>
-                        );
-                      })}
-                    </div>
-
-                    {currentUser ? (
-                      <div className="flex gap-2 items-center mt-4">
-                        <AvatarDisplay
-                          src={currentUser.avatar}
-                          alt={currentUser.name}
-                          className="w-8 h-8 rounded-full"
-                        />
-
-                        <input
-                          type="text"
-                          value={commentText}
-                          onChange={(e) => setCommentText(e.target.value)}
-                          placeholder="Escreva um comentário..."
-                          className="flex-1 rounded-full border-gray-300 border px-4 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none shadow-sm"
-                          onKeyDown={(e) =>
-                            e.key === 'Enter' && submitComment(review.id)
-                          }
-                        />
-
-                        <button
-                          onClick={() => submitComment(review.id)}
-                          className="bg-indigo-600 text-white p-2 rounded-full hover:bg-indigo-700 shadow-sm"
-                        >
-                          <Send size={16} />
-                        </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={onRequireAuth}
+                            className="w-full text-center text-sm text-[#1E3A2F] font-medium mt-3 bg-white hover:bg-[#E9EFEA] py-2.5 px-4 rounded-xl border border-[#D8E2DB] transition-colors"
+                          >
+                            Faça login para curtir ou comentar nesta resenha
+                          </button>
+                        )}
                       </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={onRequireAuth}
-                        className="w-full text-center text-sm text-indigo-600 font-medium mt-4 bg-white hover:bg-indigo-50 p-2.5 rounded-md border border-indigo-200 transition-colors"
-                      >
-                        Faça login para curtir ou comentar
-                      </button>
                     )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Coluna Lateral Editorial (Desktop) */}
+        <aside className="hidden lg:block lg:col-span-4 space-y-6 sticky top-24">
+          {/* Card do Leitor ou Convite de Visitante */}
+          <div className="bg-white rounded-3xl border border-[#E7E2D8] p-6 shadow-sm">
+            {currentUser ? (
+              <div>
+                <div
+                  className="flex items-center gap-3.5 cursor-pointer group"
+                  onClick={() => onUserClick(currentUser)}
+                >
+                  <AvatarDisplay
+                    src={currentUser.avatar}
+                    alt={currentUser.name}
+                    className="w-12 h-12 rounded-2xl border border-[#E7E2D8] text-lg"
+                  />
+                  <div className="min-w-0">
+                    <p className="text-[11px] uppercase tracking-wider text-[#9A6220] font-semibold">
+                      Seu Espaço
+                    </p>
+                    <h3 className="font-serif-display font-bold text-xl text-[#1F1C18] truncate group-hover:text-[#1E3A2F]">
+                      {currentUser.name}
+                    </h3>
+                  </div>
+                </div>
+                <p className="text-xs text-[#6E665C] mt-3 line-clamp-2 leading-relaxed">
+                  {currentUser.bio ||
+                    'Compartilhe suas impressões de leitura com a comunidade.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={onGoToSearch}
+                  className="w-full mt-4 bg-[#F4F0E8] hover:bg-[#1E3A2F] text-[#1E3A2F] hover:text-[#FBF9F5] font-medium text-sm py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  <Feather size={15} />
+                  <span>Escrever nova resenha</span>
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-[#F4F0E8] text-[#1E3A2F] flex items-center justify-center mb-3">
+                  <BookMarked size={20} />
+                </div>
+                <h3 className="font-serif-display text-2xl font-bold text-[#1F1C18]">
+                  Junte-se ao clube
+                </h3>
+                <p className="text-xs text-[#6E665C] mt-1.5 leading-relaxed">
+                  Crie sua conta para avaliar livros, trocar mensagens diretas e
+                  conversar com nosso curador literário de IA.
+                </p>
+                <button
+                  type="button"
+                  onClick={onRequireAuth}
+                  className="w-full mt-4 bg-[#1E3A2F] text-[#FBF9F5] hover:bg-[#284D3E] font-medium text-sm py-2.5 rounded-xl transition-colors"
+                >
+                  Entrar ou Cadastrar
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Panorama da Comunidade */}
+          <div className="bg-[#1E3A2F] text-[#FBF9F5] rounded-3xl p-6 shadow-sm">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-[#D8B584] font-semibold">
+              Panorama do Clube
+            </p>
+            <h3 className="font-serif-display text-2xl font-bold mt-1">
+              Vida Literária
+            </h3>
+            <div className="grid grid-cols-2 gap-4 mt-5 pt-4 border-t border-white/15">
+              <div>
+                <span className="font-serif-display text-3xl font-bold block">
+                  {reviews.length}
+                </span>
+                <span className="text-xs text-[#C7D3CC]">
+                  Resenhas publicadas
+                </span>
+              </div>
+              <div>
+                <span className="font-serif-display text-3xl font-bold block">
+                  {featuredReaders.length}
+                </span>
+                <span className="text-xs text-[#C7D3CC]">Leitores ativos</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Leitores em Destaque */}
+          {featuredReaders.length > 0 && (
+            <div className="bg-white rounded-3xl border border-[#E7E2D8] p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <Users size={16} className="text-[#9A6220]" />
+                <h3 className="font-serif-display text-xl font-bold text-[#1F1C18]">
+                  Leitores em Destaque
+                </h3>
+              </div>
+
+              <div className="space-y-3">
+                {featuredReaders.map(({ user, count }) => (
+                  <button
+                    key={user.id}
+                    type="button"
+                    onClick={() => onUserClick(user)}
+                    className="w-full flex items-center gap-3 p-2 -mx-2 rounded-xl hover:bg-[#FBF9F5] transition-colors text-left group"
+                  >
+                    <AvatarDisplay
+                      src={user.avatar}
+                      alt={user.name}
+                      className="w-9 h-9 rounded-full border border-[#E7E2D8] text-xs"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-[#1F1C18] truncate group-hover:text-[#1E3A2F]">
+                        {user.name}
+                      </p>
+                      <p className="text-[11px] text-[#8C8275]">
+                        {count} {count === 1 ? 'resenha' : 'resenhas'}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </aside>
+      </div>
     </div>
   );
 };
@@ -1450,17 +1875,15 @@ const SearchView = ({
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!searchTerm.trim()) return;
+  const runSearch = async (query: string) => {
+    if (!query.trim()) return;
 
     setIsSearching(true);
 
     try {
       const res = await fetch(
         `https://openlibrary.org/search.json?q=${encodeURIComponent(
-          searchTerm
+          query
         )}&limit=12`
       );
 
@@ -1487,6 +1910,11 @@ const SearchView = ({
     }
   };
 
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await runSearch(searchTerm);
+  };
+
   const submitReview = () => {
     if (!currentUser) return;
     if (rating === 0 || !reviewText.trim()) {
@@ -1507,64 +1935,100 @@ const SearchView = ({
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">
-        Explorar Acervo (Open Library API)
-      </h2>
+    <div className="max-w-5xl mx-auto py-6 sm:py-10 px-4 sm:px-6 fade-in">
+      {/* Banner Editorial de Busca */}
+      <div className="bg-white rounded-3xl border border-[#E7E2D8] p-6 sm:p-10 shadow-sm mb-8 text-center">
+        <span className="inline-block text-[11px] uppercase tracking-[0.2em] text-[#9A6220] font-semibold mb-2">
+          Biblioteca Mundial • Open Library
+        </span>
+        <h2 className="font-serif-display text-3xl sm:text-4xl font-bold text-[#1F1C18]">
+          Explorar Acervo Literário
+        </h2>
+        <p className="text-sm text-[#6E665C] mt-2 max-w-lg mx-auto">
+          Encontre obras clássicas e contemporâneas para registrar suas notas e
+          impressões no BookConnect.
+        </p>
 
-      <form onSubmit={handleSearch} className="relative mb-8 shadow-sm flex">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search className="h-5 w-5 text-gray-400" />
-        </div>
-
-        <input
-          type="text"
-          className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-l-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-          placeholder="Busque por título, autor... (Ex: Harry Potter)"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-
-        <button
-          type="submit"
-          className="bg-indigo-600 text-white px-6 py-3 rounded-r-lg font-medium hover:bg-indigo-700 transition-colors"
+        <form
+          onSubmit={handleSearch}
+          className="relative mt-6 max-w-2xl mx-auto flex flex-col sm:flex-row gap-2"
         >
-          Buscar
-        </button>
-      </form>
+          <div className="relative flex-1">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-[#8C8275]" />
+            </div>
+
+            <input
+              type="text"
+              className="block w-full pl-11 pr-4 py-3.5 border border-[#DCD5C9] rounded-2xl bg-[#FBF9F5] text-sm text-[#1F1C18] placeholder-[#9A9083] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A2F]/15 focus:border-[#1E3A2F] transition-all"
+              placeholder="Busque por título, autor... (Ex: Harry Potter)"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="bg-[#1E3A2F] text-[#FBF9F5] px-7 py-3.5 rounded-2xl font-medium text-sm hover:bg-[#284D3E] shadow-sm transition-colors shrink-0"
+          >
+            Buscar Obra
+          </button>
+        </form>
+
+        {/* Sugestões Rápidas */}
+        <div className="flex flex-wrap items-center justify-center gap-2 mt-5">
+          <span className="text-xs text-[#8C8275]">Sugestões:</span>
+          {QUICK_SEARCH_SUGGESTIONS.map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => {
+                setSearchTerm(item);
+                runSearch(item);
+              }}
+              className="text-xs px-3 py-1.5 rounded-full bg-[#F4F0E8] text-[#4A443D] hover:bg-[#E9EFEA] hover:text-[#1E3A2F] transition-colors"
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {isSearching ? (
-        <div className="text-center py-12 text-gray-500 font-medium">
-          Consultando a biblioteca mundial...
+        <div className="text-center py-16 text-[#6E665C]">
+          <BookOpen className="h-9 w-9 mx-auto mb-3 text-[#1E3A2F] animate-pulse" />
+          <p className="font-serif-display text-xl font-semibold text-[#1F1C18]">
+            Consultando a biblioteca mundial...
+          </p>
         </div>
-      ) : (
+      ) : results.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 fade-in">
           {results.map((book) => (
             <div
               key={book.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col hover:shadow-md transition-shadow"
+              className="bg-white rounded-3xl shadow-sm border border-[#E7E2D8] overflow-hidden flex flex-col hover:shadow-md hover:border-[#D5CCB9] transition-all"
             >
-              <div className="h-48 overflow-hidden bg-gray-100 flex justify-center py-2 relative">
+              <div className="h-56 overflow-hidden bg-[#F4F0E8] flex justify-center items-center p-5 relative">
                 <img
                   src={book.cover}
                   alt={book.title}
-                  className="h-full object-contain shadow-sm"
+                  className="h-full object-contain rounded-md shadow-[4px_8px_18px_rgba(31,28,24,0.18)]"
                 />
               </div>
 
-              <div className="p-4 flex-1 flex flex-col">
+              <div className="p-5 flex-1 flex flex-col">
                 <h3
-                  className="font-bold text-lg text-gray-900 line-clamp-1"
+                  className="font-serif-display font-bold text-xl text-[#1F1C18] line-clamp-2 leading-snug"
                   title={book.title}
                 >
                   {book.title}
                 </h3>
 
-                <p className="text-sm text-gray-600 mb-4 flex-1">
+                <p className="text-xs uppercase tracking-wider text-[#8C8275] mt-1.5 mb-5 flex-1">
                   {book.author}
                 </p>
 
-                <div className="mt-auto pt-4 border-t border-gray-100">
+                <div className="mt-auto pt-4 border-t border-[#F4F0E8]">
                   <button
                     onClick={() => {
                       if (!currentUser) {
@@ -1573,14 +2037,10 @@ const SearchView = ({
                       }
                       setSelectedBook(book);
                     }}
-                    className={`w-full py-2 rounded-md font-medium text-sm transition-colors ${
-                      currentUser
-                        ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                        : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
-                    }`}
+                    className="w-full py-2.5 rounded-xl font-medium text-sm transition-colors bg-[#F4F0E8] text-[#1E3A2F] hover:bg-[#1E3A2F] hover:text-[#FBF9F5]"
                   >
                     {currentUser
-                      ? '+ Fazer Resenha'
+                      ? '+ Escrever Resenha'
                       : 'Faça login para avaliar'}
                   </button>
                 </div>
@@ -1588,42 +2048,43 @@ const SearchView = ({
             </div>
           ))}
         </div>
-      )}
+      ) : null}
 
+      {/* Modal de Avaliação */}
       {selectedBook && currentUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60] fade-in">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden">
-            <div className="flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50">
-              <h3 className="font-bold text-lg text-gray-800">
-                Avaliar Livro
+        <div className="fixed inset-0 bg-[#1F1C18]/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 z-[60] fade-in">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden border border-[#E7E2D8]">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-[#EFECE4] bg-[#FBF9F5]">
+              <h3 className="font-serif-display font-bold text-2xl text-[#1F1C18]">
+                Avaliar Obra
               </h3>
 
               <button
                 onClick={() => setSelectedBook(null)}
-                className="text-gray-500 hover:text-gray-800"
+                className="text-[#8C8275] hover:text-[#1F1C18] p-1 rounded-full hover:bg-[#EFECE4]"
               >
                 <X size={20} />
               </button>
             </div>
 
             <div className="p-6">
-              <div className="flex gap-4 mb-6">
+              <div className="flex gap-4 mb-5 bg-[#FBF9F5] p-3.5 rounded-2xl border border-[#EFECE4]">
                 <img
                   src={selectedBook.cover}
                   alt={selectedBook.title}
-                  className="w-16 h-24 object-cover rounded shadow-sm"
+                  className="w-16 h-24 object-cover rounded-lg shadow-md shrink-0"
                 />
 
-                <div>
-                  <h4 className="font-bold text-gray-900">
+                <div className="min-w-0">
+                  <h4 className="font-serif-display font-bold text-xl text-[#1F1C18] leading-snug">
                     {selectedBook.title}
                   </h4>
 
-                  <p className="text-sm text-gray-600">
+                  <p className="text-xs uppercase tracking-wider text-[#8C8275] mt-0.5">
                     {selectedBook.author}
                   </p>
 
-                  <div className="mt-2">
+                  <div className="mt-3">
                     <RatingStars
                       rating={rating}
                       interactive
@@ -1636,13 +2097,13 @@ const SearchView = ({
               <textarea
                 value={reviewText}
                 onChange={(e) => setReviewText(e.target.value)}
-                placeholder="O que você achou desta leitura?"
-                className="w-full border border-gray-300 rounded-lg p-3 h-32 resize-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                placeholder="Compartilhe suas impressões, trechos marcantes ou o que esta leitura despertou em você..."
+                className="w-full border border-[#DCD5C9] bg-[#FBF9F5] rounded-2xl p-4 h-36 resize-none text-sm focus:bg-white focus:ring-2 focus:ring-[#1E3A2F]/15 focus:border-[#1E3A2F] outline-none transition-all"
               />
 
               <button
                 onClick={submitReview}
-                className="w-full mt-4 bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition-colors"
+                className="w-full mt-4 bg-[#1E3A2F] text-[#FBF9F5] font-medium py-3 rounded-full hover:bg-[#284D3E] shadow-sm transition-colors"
               >
                 Publicar Resenha
               </button>
@@ -1675,6 +2136,9 @@ const DirectMessagesView = ({
   const [selectedContact, setSelectedContact] = useState<any>(
     initialRecipient || null
   );
+  const [mobileShowChat, setMobileShowChat] = useState<boolean>(
+    Boolean(initialRecipient)
+  );
   const [messages, setMessages] = useState<any[]>([]);
   const [inputMsg, setInputMsg] = useState('');
   const [isLoadingMsgs, setIsLoadingMsgs] = useState(false);
@@ -1684,6 +2148,7 @@ const DirectMessagesView = ({
   useEffect(() => {
     if (initialRecipient) {
       setSelectedContact(initialRecipient);
+      setMobileShowChat(true);
     } else if (!selectedContact && contacts.length > 0) {
       const hasUnread = notifications.some((n) => !n.read);
       if (!hasUnread) {
@@ -1786,28 +2251,39 @@ const DirectMessagesView = ({
   };
 
   return (
-    <div className="max-w-5xl mx-auto py-6 px-4 h-[calc(100vh-80px)] flex flex-col fade-in">
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold text-gray-800">Mensagens</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          Converse diretamente com outros leitores do BookConnect.
-        </p>
+    <div className="max-w-6xl mx-auto py-4 sm:py-8 px-4 sm:px-6 h-[calc(100vh-140px)] md:h-[calc(100vh-100px)] flex flex-col fade-in">
+      <div className="mb-4 flex items-baseline justify-between">
+        <div>
+          <h2 className="font-serif-display text-3xl font-bold text-[#1F1C18]">
+            Correspondências
+          </h2>
+          <p className="text-xs sm:text-sm text-[#6E665C] mt-0.5">
+            Converse diretamente com outros leitores do BookConnect.
+          </p>
+        </div>
       </div>
 
-      <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex min-h-[420px]">
-        {/* Lista de Perfis */}
-        <div className="w-1/3 sm:w-72 border-r border-gray-200 bg-gray-50 flex flex-col">
-          <div className="p-3 border-b border-gray-200 font-semibold text-sm text-gray-700 flex items-center justify-between">
-            <span>Perfis da Comunidade</span>
+      <div className="flex-1 bg-white rounded-3xl shadow-sm border border-[#E7E2D8] overflow-hidden flex min-h-[400px]">
+        {/* Lista de Perfis (ocultada no mobile quando o chat está aberto) */}
+        <div
+          className={`${
+            mobileShowChat ? 'hidden md:flex' : 'flex'
+          } w-full md:w-80 border-r border-[#EFECE4] bg-[#FBF9F5] flex-col`}
+        >
+          <div className="px-4 py-3.5 border-b border-[#EFECE4] flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[#6E665C]">
+              Leitores da Comunidade
+            </span>
             {notifications.filter((n) => !n.read).length > 0 && (
-              <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+              <span className="bg-[#A63D2D] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
                 {notifications.filter((n) => !n.read).length} nova(s)
               </span>
             )}
           </div>
-          <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+
+          <div className="flex-1 overflow-y-auto divide-y divide-[#F4F0E8]">
             {contacts.length === 0 ? (
-              <div className="p-4 text-center text-xs text-gray-400">
+              <div className="p-6 text-center text-xs text-[#8C8275]">
                 Nenhum outro leitor disponível no momento.
               </div>
             ) : (
@@ -1827,24 +2303,25 @@ const DirectMessagesView = ({
                     key={contact.id}
                     onClick={() => {
                       setSelectedContact(contact);
+                      setMobileShowChat(true);
                       onMarkContactRead(contact.id);
                     }}
-                    className={`w-full p-3 flex items-center gap-3 text-left transition-colors ${
+                    className={`w-full p-3.5 flex items-center gap-3 text-left transition-colors ${
                       isSelected
-                        ? 'bg-indigo-50 border-r-4 border-indigo-600'
+                        ? 'bg-[#E9EFEA] border-r-4 border-[#1E3A2F]'
                         : unreadCount > 0
-                        ? 'bg-indigo-50/40 hover:bg-indigo-50/70'
-                        : 'hover:bg-gray-100'
+                        ? 'bg-[#F3F6F3] hover:bg-[#E9EFEA]/70'
+                        : 'hover:bg-[#F4F0E8]'
                     }`}
                   >
                     <div className="relative shrink-0">
                       <AvatarDisplay
                         src={contact.avatar}
                         alt={contact.name}
-                        className="w-10 h-10 rounded-full text-sm"
+                        className="w-11 h-11 rounded-full text-sm border border-[#E7E2D8]"
                       />
                       {unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 border-2 border-white" />
+                        <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-[#A63D2D] border-2 border-white" />
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -1852,24 +2329,24 @@ const DirectMessagesView = ({
                         <p
                           className={`text-sm truncate ${
                             unreadCount > 0
-                              ? 'font-bold text-gray-900'
-                              : 'font-semibold text-gray-900'
+                              ? 'font-bold text-[#1F1C18]'
+                              : 'font-semibold text-[#2C2824]'
                           }`}
                         >
                           {contact.name}
                         </p>
                         {unreadCount > 0 && (
-                          <span className="bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0">
+                          <span className="bg-[#1E3A2F] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0">
                             {unreadCount}
                           </span>
                         )}
                       </div>
                       {lastUnread ? (
-                        <p className="text-xs font-medium text-indigo-700 truncate">
-                          Nova mensagem: "{lastUnread.text}"
+                        <p className="text-xs font-medium text-[#1E3A2F] truncate mt-0.5">
+                          “{lastUnread.text}”
                         </p>
                       ) : (
-                        <p className="text-xs text-gray-500 truncate">
+                        <p className="text-xs text-[#8C8275] truncate mt-0.5">
                           {contact.bio || 'Leitor do BookConnect'}
                         </p>
                       )}
@@ -1882,37 +2359,49 @@ const DirectMessagesView = ({
         </div>
 
         {/* Área da Conversa */}
-        <div className="flex-1 flex flex-col">
+        <div
+          className={`${
+            mobileShowChat ? 'flex' : 'hidden md:flex'
+          } flex-1 flex-col bg-white`}
+        >
           {selectedContact ? (
             <>
-              <div className="p-3 border-b border-gray-200 bg-white flex items-center gap-3">
+              <div className="px-4 py-3 border-b border-[#EFECE4] bg-white flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMobileShowChat(false)}
+                  className="md:hidden p-1.5 -ml-1 text-[#5C554C] hover:text-[#1E3A2F] hover:bg-[#F4F0E8] rounded-full"
+                  title="Voltar para contatos"
+                >
+                  <ArrowLeft size={19} />
+                </button>
                 <AvatarDisplay
                   src={selectedContact.avatar}
                   alt={selectedContact.name}
-                  className="w-10 h-10 rounded-full"
+                  className="w-10 h-10 rounded-full border border-[#E7E2D8]"
                 />
-                <div>
-                  <p className="font-semibold text-gray-900">
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm text-[#1F1C18] truncate">
                     {selectedContact.name}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-[#8C8275] truncate">
                     {selectedContact.bio || 'Leitor do BookConnect'}
                   </p>
                 </div>
               </div>
 
-              <div className="flex-1 p-4 overflow-y-auto bg-[#F9FAFB] space-y-3">
+              <div className="flex-1 p-4 sm:p-6 overflow-y-auto bg-[#FBF9F5] space-y-3">
                 {isLoadingMsgs ? (
-                  <div className="text-center text-gray-400 mt-10 text-sm">
+                  <div className="text-center text-[#8C8275] mt-10 text-sm">
                     Carregando conversa...
                   </div>
                 ) : messages.length === 0 ? (
-                  <div className="text-center text-gray-400 mt-10">
+                  <div className="text-center text-[#8C8275] mt-12">
                     <MessageCircle
                       size={32}
-                      className="mx-auto mb-2 opacity-50"
+                      className="mx-auto mb-2 opacity-40"
                     />
-                    <p className="text-sm font-medium">
+                    <p className="text-sm font-medium text-[#5C554C]">
                       Nenhuma mensagem com {selectedContact.name} ainda.
                     </p>
                     <p className="text-xs mt-1">
@@ -1930,18 +2419,18 @@ const DirectMessagesView = ({
                         }`}
                       >
                         <div
-                          className={`max-w-[80%] rounded-2xl px-4 py-2.5 shadow-sm ${
+                          className={`max-w-[82%] sm:max-w-[72%] rounded-2xl px-4 py-2.5 shadow-2xs ${
                             isMine
-                              ? 'bg-indigo-600 text-white rounded-br-sm'
-                              : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
+                              ? 'bg-[#1E3A2F] text-[#FBF9F5] rounded-br-sm'
+                              : 'bg-white border border-[#E7E2D8] text-[#2C2824] rounded-bl-sm'
                           }`}
                         >
-                          <p className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                          <p className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed">
                             {msg.text}
                           </p>
                           <span
                             className={`text-[10px] block mt-1 text-right ${
-                              isMine ? 'text-indigo-200' : 'text-gray-400'
+                              isMine ? 'text-[#B5C7BC]' : 'text-[#9A9083]'
                             }`}
                           >
                             {msg.createdAt
@@ -1959,7 +2448,7 @@ const DirectMessagesView = ({
                 <div ref={chatEndRef} />
               </div>
 
-              <div className="p-3 bg-white border-t border-gray-200">
+              <div className="p-3 sm:p-4 bg-white border-t border-[#EFECE4]">
                 <form
                   onSubmit={handleSendDirectMessage}
                   className="flex gap-2"
@@ -1968,24 +2457,24 @@ const DirectMessagesView = ({
                     type="text"
                     value={inputMsg}
                     onChange={(e) => setInputMsg(e.target.value)}
-                    placeholder={`Escreva uma mensagem para ${selectedContact.name}...`}
-                    className="flex-1 bg-gray-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-full px-4 py-2 text-sm outline-none transition-all"
+                    placeholder={`Escreva para ${selectedContact.name}...`}
+                    className="flex-1 bg-[#F4F0E8] border border-transparent focus:bg-white focus:border-[#1E3A2F] focus:ring-2 focus:ring-[#1E3A2F]/15 rounded-full px-4 py-2.5 text-sm outline-none transition-all"
                   />
                   <button
                     type="submit"
                     disabled={!inputMsg.trim() || isSending}
-                    className="bg-indigo-600 text-white p-2.5 rounded-full hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                    className="bg-[#1E3A2F] text-[#FBF9F5] p-2.5 px-4 rounded-full hover:bg-[#284D3E] disabled:opacity-50 transition-colors flex items-center justify-center"
                     title="Enviar mensagem"
                   >
-                    <Send size={18} />
+                    <Send size={17} />
                   </button>
                 </form>
               </div>
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-sm p-6 text-center">
-              <MessageCircle size={36} className="mb-2 opacity-40" />
-              <p>Selecione um perfil à esquerda para visualizar a conversa.</p>
+            <div className="flex-1 flex flex-col items-center justify-center text-[#8C8275] text-sm p-6 text-center">
+              <MessageCircle size={36} className="mb-2 opacity-35" />
+              <p>Selecione um leitor à esquerda para iniciar a conversa.</p>
             </div>
           )}
         </div>
@@ -1994,7 +2483,7 @@ const DirectMessagesView = ({
   );
 };
 
-// 6. CHATBOT FLUTUANTE NO CANTO INFERIOR DIREITO (FAQ LOCAL PARA VISITANTES + WEBSOCKET/GEMINI PARA LOGADOS)
+// 6. CHATBOT FLUTUANTE (FAQ LOCAL PARA VISITANTES + WEBSOCKET/GEMINI PARA LOGADOS)
 const FloatingChatbot = ({
   currentUser,
   onRequireAuth,
@@ -2229,31 +2718,31 @@ const FloatingChatbot = ({
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+    <div className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-50 flex flex-col items-end">
       {isOpen && (
-        <div className="mb-3 w-[350px] sm:w-[400px] h-[500px] bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col fade-in">
-          <div className="p-3 bg-indigo-600 text-white flex items-center justify-between">
+        <div className="mb-3 w-[calc(100vw-2rem)] sm:w-[390px] h-[min(520px,72vh)] bg-white rounded-3xl shadow-2xl border border-[#E7E2D8] overflow-hidden flex flex-col fade-in">
+          <div className="px-4 py-3.5 bg-[#1E3A2F] text-[#FBF9F5] flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
-                <Bot size={20} />
+              <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
+                <Bot size={19} />
               </div>
               <div>
-                <p className="font-semibold text-sm leading-tight">
-                  Assistente BookConnect
+                <p className="font-serif-display font-bold text-lg leading-tight">
+                  Curador BookConnect
                 </p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span
                     className={`w-2 h-2 rounded-full ${
                       !currentUser
-                        ? 'bg-emerald-300'
+                        ? 'bg-[#D8B584]'
                         : connectionStatus === 'connected'
-                        ? 'bg-green-400'
+                        ? 'bg-emerald-400'
                         : connectionStatus === 'connecting'
-                        ? 'bg-yellow-300'
+                        ? 'bg-amber-300'
                         : 'bg-red-400'
                     }`}
                   />
-                  <span className="text-[11px] text-indigo-100">
+                  <span className="text-[11px] text-[#C7D3CC]">
                     {!currentUser
                       ? 'Visitante • Perguntas Rápidas'
                       : connectionStatus === 'connected'
@@ -2271,42 +2760,44 @@ const FloatingChatbot = ({
                 <button
                   type="button"
                   onClick={handleReconnect}
-                  className="text-xs bg-white/20 hover:bg-white/30 px-2 py-1 rounded"
+                  className="text-xs bg-white/15 hover:bg-white/25 px-2.5 py-1 rounded-full transition-colors"
                 >
                   Reconectar
                 </button>
               )}
               <button
                 onClick={() => setIsOpen(false)}
-                className="text-indigo-100 hover:text-white p-1"
+                className="text-[#C7D3CC] hover:text-white p-1"
                 title="Fechar chat"
               >
-                <X size={20} />
+                <X size={19} />
               </button>
             </div>
           </div>
 
-          <div className="flex-1 p-4 overflow-y-auto bg-[#F9FAFB] space-y-3">
+          <div className="flex-1 p-4 overflow-y-auto bg-[#FBF9F5] space-y-3">
             {messages.length === 0 && (
-              <div className="text-center text-gray-500 mt-4">
-                <Bot size={36} className="mx-auto mb-2 text-indigo-400" />
+              <div className="text-center text-[#6E665C] mt-4">
+                <div className="w-12 h-12 rounded-2xl bg-[#E9EFEA] text-[#1E3A2F] flex items-center justify-center mx-auto mb-3">
+                  <Bot size={24} />
+                </div>
                 {currentUser ? (
                   <>
-                    <p className="font-medium text-sm text-gray-700">
+                    <p className="font-serif-display font-bold text-lg text-[#1F1C18]">
                       Olá, {currentUser?.name?.split(' ')[0]}!
                     </p>
-                    <p className="text-xs mt-1 text-gray-500">
-                      Envie uma pergunta para conversar com o assistente do
-                      BookConnect.
+                    <p className="text-xs mt-1 text-[#6E665C]">
+                      Peça recomendações literárias ou tire dúvidas com o
+                      assistente do BookConnect.
                     </p>
                   </>
                 ) : (
                   <>
-                    <p className="font-medium text-sm text-gray-700">
-                      Olá! Bem-vindo ao BookConnect 📚
+                    <p className="font-serif-display font-bold text-lg text-[#1F1C18]">
+                      Bem-vindo ao BookConnect
                     </p>
-                    <p className="text-xs mt-1 text-gray-500">
-                      Escolha uma pergunta abaixo para saber como o site
+                    <p className="text-xs mt-1 text-[#6E665C]">
+                      Escolha uma pergunta abaixo para saber como o clube
                       funciona:
                     </p>
                   </>
@@ -2323,18 +2814,18 @@ const FloatingChatbot = ({
                   className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 shadow-sm ${
+                    className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 shadow-2xs ${
                       isUser
-                        ? 'bg-indigo-600 text-white rounded-br-sm'
-                        : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
+                        ? 'bg-[#1E3A2F] text-[#FBF9F5] rounded-br-sm'
+                        : 'bg-white border border-[#E7E2D8] text-[#2C2824] rounded-bl-sm'
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap break-words">
+                    <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
                       {msg.text}
                     </p>
                     <span
                       className={`text-[10px] block mt-1.5 text-right ${
-                        isUser ? 'text-indigo-200' : 'text-gray-400'
+                        isUser ? 'text-[#B5C7BC]' : 'text-[#9A9083]'
                       }`}
                     >
                       {msg.timestamp}
@@ -2346,8 +2837,8 @@ const FloatingChatbot = ({
 
             {!currentUser && (
               <div className="pt-2 space-y-2">
-                <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
-                  Perguntas rápidas
+                <p className="text-[10px] font-semibold text-[#8C8275] uppercase tracking-wider">
+                  Perguntas frequentes
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {GUEST_FAQ.map((faq) => (
@@ -2355,7 +2846,7 @@ const FloatingChatbot = ({
                       key={faq.question}
                       type="button"
                       onClick={() => handleFaqClick(faq)}
-                      className="text-left text-xs bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl px-3 py-1.5 transition-colors shadow-sm"
+                      className="text-left text-xs bg-white hover:bg-[#E9EFEA] text-[#1E3A2F] border border-[#DCE4DE] rounded-xl px-3 py-1.5 transition-colors shadow-2xs"
                     >
                       {faq.question}
                     </button>
@@ -2366,8 +2857,8 @@ const FloatingChatbot = ({
 
             {isWaitingResponse && (
               <div className="flex justify-start">
-                <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-3.5 py-2.5 text-xs text-gray-500">
-                  Gemini está processando sua pergunta...
+                <div className="bg-white border border-[#E7E2D8] rounded-2xl rounded-bl-sm px-3.5 py-2.5 text-xs text-[#6E665C]">
+                  Gemini está elaborando sua resposta...
                 </div>
               </div>
             )}
@@ -2375,12 +2866,12 @@ const FloatingChatbot = ({
           </div>
 
           {currentUser && connectionError && (
-            <div className="px-3 py-2 bg-red-50 border-t border-red-100 text-xs text-red-600">
+            <div className="px-3.5 py-2 bg-[#FDF2F0] border-t border-[#F5D6D0] text-xs text-[#A63D2D]">
               {connectionError}
             </div>
           )}
 
-          <div className="p-3 bg-white border-t border-gray-200">
+          <div className="p-3 bg-white border-t border-[#EFECE4]">
             {currentUser ? (
               <form onSubmit={handleSend} className="flex gap-2">
                 <input
@@ -2393,7 +2884,7 @@ const FloatingChatbot = ({
                       : 'Aguardando conexão...'
                   }
                   disabled={connectionStatus !== 'connected'}
-                  className="flex-1 bg-gray-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-full px-4 py-2 text-sm outline-none transition-all disabled:opacity-60"
+                  className="flex-1 bg-[#F4F0E8] border border-transparent focus:bg-white focus:border-[#1E3A2F] focus:ring-2 focus:ring-[#1E3A2F]/15 rounded-full px-4 py-2 text-sm outline-none transition-all disabled:opacity-60"
                 />
 
                 <button
@@ -2403,15 +2894,15 @@ const FloatingChatbot = ({
                     connectionStatus !== 'connected' ||
                     isWaitingResponse
                   }
-                  className="bg-indigo-600 text-white p-2.5 rounded-full hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                  className="bg-[#1E3A2F] text-[#FBF9F5] p-2.5 rounded-full hover:bg-[#284D3E] disabled:opacity-50 transition-colors"
                   title="Enviar pergunta"
                 >
-                  <Send size={16} />
+                  <Send size={15} />
                 </button>
               </form>
             ) : (
               <div className="text-center space-y-2">
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-[#6E665C]">
                   Quer conversar livremente com a IA (Gemini) e pedir
                   recomendações?
                 </p>
@@ -2421,7 +2912,7 @@ const FloatingChatbot = ({
                     setIsOpen(false);
                     onRequireAuth();
                   }}
-                  className="w-full flex items-center justify-center gap-1.5 bg-indigo-600 text-white text-xs font-semibold py-2 px-4 rounded-full hover:bg-indigo-700 transition-colors"
+                  className="w-full flex items-center justify-center gap-1.5 bg-[#1E3A2F] text-[#FBF9F5] text-xs font-semibold py-2.5 px-4 rounded-full hover:bg-[#284D3E] transition-colors"
                 >
                   <LogIn size={14} />
                   <span>Fazer login para usar a IA completa</span>
@@ -2435,16 +2926,16 @@ const FloatingChatbot = ({
       {/* Botão Flutuante do Chatbot */}
       <button
         onClick={() => setIsOpen((prev) => !prev)}
-        className="w-14 h-14 rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 hover:scale-105 transition-all flex items-center justify-center"
+        className="w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-[#1E3A2F] text-[#FBF9F5] shadow-lg hover:bg-[#284D3E] hover:scale-105 transition-all flex items-center justify-center ring-4 ring-[#FBF9F5]"
         title="Abrir Assistente (BookConnect)"
       >
-        {isOpen ? <X size={24} /> : <Bot size={26} />}
+        {isOpen ? <X size={22} /> : <Bot size={24} />}
       </button>
     </div>
   );
 };
 
-// 7. AUTH — AMAZON COGNITO
+// 7. AUTH — AMAZON COGNITO (LAYOUT EDITORIAL SPLIT-CARD)
 const AuthView = ({ error }: { error: string }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [isRedirecting, setIsRedirecting] = useState(false);
@@ -2461,58 +2952,95 @@ const AuthView = ({ error }: { error: string }) => {
   };
 
   return (
-    <div className="min-h-[calc(100vh-80px)] flex flex-col justify-center py-12 sm:px-6 lg:px-8 fade-in">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <BookOpen className="h-12 w-12 text-indigo-600 mx-auto" />
-
-        <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
-          {isLogin ? 'Acesso ao Sistema' : 'Crie sua conta'}
-        </h2>
-
-        <p className="mt-2 text-sm text-gray-600">
-          {isLogin
-            ? 'Entre para interagir com a comunidade.'
-            : 'Junte-se a leitores no BookConnect.'}
-        </p>
-      </div>
-
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-10 shadow rounded-xl border border-gray-200">
-          <button
-            type="button"
-            onClick={handleAuthentication}
-            disabled={isRedirecting}
-            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors disabled:opacity-60"
-          >
-            {isRedirecting
-              ? 'Redirecionando...'
-              : isLogin
-              ? 'Entrar com Cognito'
-              : 'Cadastrar com Cognito'}
-          </button>
-
-          {error && (
-            <p className="text-red-500 text-xs mt-3 font-medium text-center">
-              {error}
+    <div className="min-h-[calc(100vh-140px)] flex items-center justify-center py-8 px-4 sm:px-6 fade-in">
+      <div className="max-w-4xl w-full bg-white rounded-3xl shadow-md border border-[#E7E2D8] overflow-hidden grid grid-cols-1 md:grid-cols-12">
+        {/* Painel Literário Decorativo */}
+        <div className="md:col-span-5 bg-[#1E3A2F] text-[#FBF9F5] p-8 sm:p-10 flex flex-col justify-between relative overflow-hidden">
+          <div
+            className="absolute inset-0 opacity-10"
+            style={{
+              backgroundImage:
+                'radial-gradient(#FBF9F5 1px, transparent 1px)',
+              backgroundSize: '18px 18px',
+            }}
+          />
+          <div className="relative">
+            <div className="w-11 h-11 rounded-2xl bg-white/15 flex items-center justify-center mb-6">
+              <BookOpen size={22} />
+            </div>
+            <p className="text-[11px] uppercase tracking-[0.2em] text-[#D8B584] font-semibold">
+              BookConnect
             </p>
-          )}
-
-          <div className="mt-6 text-center text-sm border-t border-gray-200 pt-6">
-            <span className="text-gray-600">
-              {isLogin ? 'Ainda não tem conta?' : 'Já possui uma conta?'}
-            </span>{' '}
-            <button
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-indigo-600 font-medium hover:underline"
-            >
-              {isLogin ? 'Cadastre-se aqui' : 'Faça login'}
-            </button>
+            <h2 className="font-serif-display text-3xl sm:text-4xl font-bold mt-2 leading-tight">
+              Onde cada página gera uma conversa.
+            </h2>
           </div>
 
-          <p className="text-xs text-gray-500 text-center mt-4">
-            A autenticação e o cadastro são realizados com segurança pelo
-            Amazon Cognito.
+          <blockquote className="relative mt-8 pt-6 border-t border-white/15">
+            <p className="font-serif-display italic text-lg text-[#E4ECE7] leading-relaxed">
+              “Um leitor vive mil vidas antes de morrer. O homem que nunca lê
+              vive apenas uma.”
+            </p>
+            <footer className="text-xs text-[#B5C7BC] mt-2">
+              — George R. R. Martin
+            </footer>
+          </blockquote>
+        </div>
+
+        {/* Painel de Acesso Cognito */}
+        <div className="md:col-span-7 p-8 sm:p-12 flex flex-col justify-center">
+          <span className="text-[11px] uppercase tracking-[0.18em] text-[#9A6220] font-semibold">
+            {isLogin ? 'Bem-vindo de volta' : 'Novo membro'}
+          </span>
+          <h3 className="font-serif-display text-3xl sm:text-4xl font-bold text-[#1F1C18] mt-1">
+            {isLogin ? 'Acesse sua estante' : 'Crie sua conta'}
+          </h3>
+          <p className="text-sm text-[#6E665C] mt-2 leading-relaxed">
+            {isLogin
+              ? 'Entre para publicar resenhas, curtir comentários, enviar mensagens e conversar com nossa IA.'
+              : 'Junte-se a uma comunidade apaixonada por livros e descobertas literárias.'}
           </p>
+
+          <div className="mt-8">
+            <button
+              type="button"
+              onClick={handleAuthentication}
+              disabled={isRedirecting}
+              className="w-full flex items-center justify-center gap-2 py-3.5 px-5 rounded-full text-sm font-semibold text-[#FBF9F5] bg-[#1E3A2F] hover:bg-[#284D3E] shadow-sm transition-all disabled:opacity-60"
+            >
+              <LogIn size={17} />
+              <span>
+                {isRedirecting
+                  ? 'Redirecionando...'
+                  : isLogin
+                  ? 'Entrar com Cognito'
+                  : 'Cadastrar com Cognito'}
+              </span>
+            </button>
+
+            {error && (
+              <p className="text-[#A63D2D] text-xs mt-3 font-medium text-center">
+                {error}
+              </p>
+            )}
+
+            <div className="mt-7 text-center text-sm border-t border-[#EFECE4] pt-6">
+              <span className="text-[#6E665C]">
+                {isLogin ? 'Ainda não tem conta?' : 'Já possui uma conta?'}
+              </span>{' '}
+              <button
+                onClick={() => setIsLogin(!isLogin)}
+                className="text-[#1E3A2F] font-semibold hover:underline"
+              >
+                {isLogin ? 'Cadastre-se aqui' : 'Faça login'}
+              </button>
+            </div>
+
+            <p className="text-[11px] text-[#9A9083] text-center mt-4">
+              A autenticação e o cadastro são realizados com segurança pelo
+              Amazon Cognito.
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -3144,8 +3672,38 @@ export default function App() {
     setCurrentView('feed');
   };
 
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
   return (
-    <div className="min-h-screen bg-[#F3F4F6] font-sans text-gray-900 pb-10">
+    <div className="min-h-screen bg-[#F5F1E9] font-body text-[#1F1C18] pb-24 md:pb-12 selection:bg-[#1E3A2F] selection:text-[#FBF9F5]">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,500;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+        .font-serif-display {
+          font-family: 'Cormorant Garamond', Georgia, serif;
+        }
+
+        .font-body {
+          font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        .fade-in {
+          animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(6px);
+          }
+
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
+
       <Header
         currentUser={currentUser}
         currentView={currentView}
@@ -3158,20 +3716,20 @@ export default function App() {
         onMarkAllAsRead={handleMarkAllNotificationsAsRead}
       />
 
-      {/* Aviso Toast na própria tela (substitui alert do navegador) */}
+      {/* Aviso Toast na própria tela */}
       {toast && (
-        <div className="fixed top-20 right-4 z-[70] max-w-sm w-full fade-in">
+        <div className="fixed top-20 right-4 left-4 sm:left-auto z-[70] sm:max-w-sm w-auto sm:w-full fade-in">
           <div
-            className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium ${
+            className={`flex items-center justify-between gap-3 px-4 py-3 rounded-2xl shadow-lg border text-sm font-medium ${
               toast.type === 'error'
-                ? 'bg-red-50 border-red-200 text-red-800'
+                ? 'bg-[#FDF2F0] border-[#F2CBC4] text-[#8F2F21]'
                 : toast.type === 'success'
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                : 'bg-indigo-50 border-indigo-200 text-indigo-800'
+                ? 'bg-[#EEF6F0] border-[#C6DFCD] text-[#1E3A2F]'
+                : 'bg-[#FBF9F5] border-[#E0D9CC] text-[#2C2824]'
             }`}
           >
             <div className="flex items-center gap-2">
-              <AlertCircle size={18} className="shrink-0" />
+              <AlertCircle size={17} className="shrink-0" />
               <span>{toast.text}</span>
             </div>
             <button
@@ -3185,21 +3743,21 @@ export default function App() {
         </div>
       )}
 
-      {/* Modal de Confirmação na própria tela (substitui window.confirm do navegador) */}
+      {/* Modal de Confirmação na própria tela */}
       {confirmModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[80] fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-gray-200">
-            <h3 className="text-lg font-bold text-gray-900">
+        <div className="fixed inset-0 bg-[#1F1C18]/60 backdrop-blur-xs flex items-center justify-center p-4 z-[80] fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 border border-[#E7E2D8]">
+            <h3 className="font-serif-display text-2xl font-bold text-[#1F1C18]">
               {confirmModal.title}
             </h3>
-            <p className="text-sm text-gray-600 mt-2">
+            <p className="text-sm text-[#5C554C] mt-2 leading-relaxed">
               {confirmModal.message}
             </p>
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setConfirmModal(null)}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+                className="px-4 py-2 rounded-full text-sm font-medium text-[#5C554C] bg-[#F4F0E8] hover:bg-[#E7E2D8] transition-colors"
               >
                 Cancelar
               </button>
@@ -3209,7 +3767,7 @@ export default function App() {
                   confirmModal.onConfirm();
                   setConfirmModal(null);
                 }}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-colors"
+                className="px-5 py-2 rounded-full text-sm font-medium text-white bg-[#A63D2D] hover:bg-[#8C3123] transition-colors"
               >
                 Excluir
               </button>
@@ -3219,27 +3777,12 @@ export default function App() {
       )}
 
       <main>
-        <style>{`
-          .fade-in {
-            animation: fadeIn 0.3s ease-in-out;
-          }
-
-          @keyframes fadeIn {
-            from {
-              opacity: 0;
-              transform: translateY(5px);
-            }
-
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-        `}</style>
-
         {authLoading ? (
-          <div className="flex justify-center items-center py-20 text-gray-500">
-            Verificando sessão...
+          <div className="flex flex-col justify-center items-center py-24 text-[#6E665C] gap-3">
+            <BookOpen className="h-8 w-8 text-[#1E3A2F] animate-pulse" />
+            <span className="font-serif-display text-xl">
+              Verificando sessão...
+            </span>
           </div>
         ) : (
           <>
@@ -3253,6 +3796,7 @@ export default function App() {
                 onRequireAuth={() => setCurrentView('auth')}
                 onShowToast={showToast}
                 onRequestConfirm={requestConfirm}
+                onGoToSearch={() => setCurrentView('search')}
                 actions={{
                   onEditReview: handleEditReview,
                   onDeleteReview: handleDeleteReview,
@@ -3305,6 +3849,15 @@ export default function App() {
           </>
         )}
       </main>
+
+      {/* Navegação Inferior para Celular */}
+      <MobileBottomNav
+        currentUser={currentUser}
+        currentView={currentView}
+        setView={setCurrentView}
+        onUserClick={handleUserClick}
+        unreadCount={unreadCount}
+      />
 
       {/* Chatbot flutuante — FAQ local para visitantes e IA (Gemini) para logados */}
       <FloatingChatbot
