@@ -320,8 +320,9 @@ const ProfileView = ({
       }
 
       // Adiciona query string de timestamp na URL do S3 para forçar atualização imediata na tela
+      const separator = result.profile?.avatarUrl?.includes('?') ? '&' : '?';
       const updatedAvatarUrl = result.profile?.avatarUrl
-        ? `${result.profile.avatarUrl}?t=${Date.now()}`
+        ? `${result.profile.avatarUrl}${separator}t=${Date.now()}`
         : avatar;
 
       setAvatar(updatedAvatarUrl);
