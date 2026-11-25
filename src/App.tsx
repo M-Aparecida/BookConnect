@@ -22,7 +22,6 @@ import {
   Sparkles,
   Feather,
   BookMarked,
-  Users,
   Plus,
 } from 'lucide-react';
 
@@ -132,13 +131,20 @@ const AvatarDisplay = ({
   className?: string;
   onClick?: () => void;
 }) => {
-  if (src) {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [src]);
+
+  if (src && !hasError) {
     return (
       <img
         src={src}
         alt={alt || 'Avatar'}
         className={`object-cover shrink-0 ${className || ''}`}
         onClick={onClick}
+        onError={() => setHasError(true)}
       />
     );
   }
@@ -1104,24 +1110,6 @@ const FeedView = ({
       })
     : reviews;
 
-  // Leitores ativos derivados apenas do estado atual de reviews (sem alterar backend)
-  const featuredReaders = React.useMemo(() => {
-    const map = new Map<string, { user: any; count: number }>();
-    reviews.forEach((r) => {
-      if (r.user?.id) {
-        const existing = map.get(r.user.id);
-        if (existing) {
-          existing.count += 1;
-        } else {
-          map.set(r.user.id, { user: r.user, count: 1 });
-        }
-      }
-    });
-    return Array.from(map.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-  }, [reviews]);
-
   const submitComment = (reviewId: string) => {
     if (!currentUser || !commentText.trim()) return;
 
@@ -1795,60 +1783,17 @@ const FeedView = ({
             <h3 className="font-serif-display text-2xl font-bold mt-1">
               Vida Literária
             </h3>
-            <div className="grid grid-cols-2 gap-4 mt-5 pt-4 border-t border-white/15">
-              <div>
-                <span className="font-serif-display text-3xl font-bold block">
-                  {reviews.length}
-                </span>
-                <span className="text-xs text-[#C7D3CC]">
-                  Resenhas publicadas
-                </span>
-              </div>
-              <div>
-                <span className="font-serif-display text-3xl font-bold block">
-                  {featuredReaders.length}
-                </span>
-                <span className="text-xs text-[#C7D3CC]">Leitores ativos</span>
-              </div>
+            <div className="mt-5 pt-4 border-t border-white/15">
+              <span className="font-serif-display text-4xl font-bold block leading-none">
+                {reviews.length}
+              </span>
+              <span className="text-xs text-[#C7D3CC] mt-1.5 block">
+                {reviews.length === 1
+                  ? 'Resenha publicada na comunidade'
+                  : 'Resenhas publicadas na comunidade'}
+              </span>
             </div>
           </div>
-
-          {/* Leitores em Destaque */}
-          {featuredReaders.length > 0 && (
-            <div className="bg-white rounded-3xl border border-[#E7E2D8] p-6 shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <Users size={16} className="text-[#9A6220]" />
-                <h3 className="font-serif-display text-xl font-bold text-[#1F1C18]">
-                  Leitores em Destaque
-                </h3>
-              </div>
-
-              <div className="space-y-3">
-                {featuredReaders.map(({ user, count }) => (
-                  <button
-                    key={user.id}
-                    type="button"
-                    onClick={() => onUserClick(user)}
-                    className="w-full flex items-center gap-3 p-2 -mx-2 rounded-xl hover:bg-[#FBF9F5] transition-colors text-left group"
-                  >
-                    <AvatarDisplay
-                      src={user.avatar}
-                      alt={user.name}
-                      className="w-9 h-9 rounded-full border border-[#E7E2D8] text-xs"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-[#1F1C18] truncate group-hover:text-[#1E3A2F]">
-                        {user.name}
-                      </p>
-                      <p className="text-[11px] text-[#8C8275]">
-                        {count} {count === 1 ? 'resenha' : 'resenhas'}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </aside>
       </div>
     </div>
@@ -2124,6 +2069,7 @@ const DirectMessagesView = ({
   onNotificationsUpdated,
   onMarkContactRead,
   onShowToast,
+  onUserClick,
 }: {
   currentUser: any;
   contacts: any[];
@@ -2132,6 +2078,7 @@ const DirectMessagesView = ({
   onNotificationsUpdated: (notifs: any[]) => void;
   onMarkContactRead: (contactId: string) => void;
   onShowToast: (text: string, type?: 'error' | 'success' | 'info') => void;
+  onUserClick: (user: any) => void;
 }) => {
   const [selectedContact, setSelectedContact] = useState<any>(
     initialRecipient || null
@@ -2366,28 +2313,47 @@ const DirectMessagesView = ({
         >
           {selectedContact ? (
             <>
-              <div className="px-4 py-3 border-b border-[#EFECE4] bg-white flex items-center gap-3">
+              <div className="px-4 py-3 border-b border-[#EFECE4] bg-white flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => setMobileShowChat(false)}
+                    className="md:hidden p-1.5 -ml-1 text-[#5C554C] hover:text-[#1E3A2F] hover:bg-[#F4F0E8] rounded-full shrink-0"
+                    title="Voltar para contatos"
+                  >
+                    <ArrowLeft size={19} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onUserClick(selectedContact)}
+                    className="flex items-center gap-3 min-w-0 text-left group cursor-pointer rounded-xl p-1 -m-1 hover:bg-[#FBF9F5] transition-colors"
+                    title={`Ver perfil de ${selectedContact.name}`}
+                  >
+                    <AvatarDisplay
+                      src={selectedContact.avatar}
+                      alt={selectedContact.name}
+                      className="w-10 h-10 rounded-full border border-[#E7E2D8] group-hover:ring-2 group-hover:ring-[#1E3A2F]/20 transition-all"
+                    />
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm text-[#1F1C18] truncate group-hover:text-[#1E3A2F] group-hover:underline">
+                        {selectedContact.name}
+                      </p>
+                      <p className="text-xs text-[#8C8275] truncate">
+                        {selectedContact.bio || 'Leitor do BookConnect'}
+                      </p>
+                    </div>
+                  </button>
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => setMobileShowChat(false)}
-                  className="md:hidden p-1.5 -ml-1 text-[#5C554C] hover:text-[#1E3A2F] hover:bg-[#F4F0E8] rounded-full"
-                  title="Voltar para contatos"
+                  onClick={() => onUserClick(selectedContact)}
+                  className="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium text-[#1E3A2F] bg-[#F4F0E8] hover:bg-[#E9EFEA] px-3 py-1.5 rounded-full transition-colors shrink-0"
                 >
-                  <ArrowLeft size={19} />
+                  <User size={13} />
+                  <span>Ver perfil</span>
                 </button>
-                <AvatarDisplay
-                  src={selectedContact.avatar}
-                  alt={selectedContact.name}
-                  className="w-10 h-10 rounded-full border border-[#E7E2D8]"
-                />
-                <div className="min-w-0">
-                  <p className="font-semibold text-sm text-[#1F1C18] truncate">
-                    {selectedContact.name}
-                  </p>
-                  <p className="text-xs text-[#8C8275] truncate">
-                    {selectedContact.bio || 'Leitor do BookConnect'}
-                  </p>
-                </div>
               </div>
 
               <div className="flex-1 p-4 sm:p-6 overflow-y-auto bg-[#FBF9F5] space-y-3">
@@ -3829,6 +3795,7 @@ export default function App() {
                 onNotificationsUpdated={handleNotificationsUpdated}
                 onMarkContactRead={handleMarkContactNotificationsAsRead}
                 onShowToast={showToast}
+                onUserClick={handleUserClick}
               />
             )}
 
