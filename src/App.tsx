@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   BookOpen,
   Search,
@@ -12,6 +12,8 @@ import {
   X,
   Edit3,
   Save,
+  Bell,
+  Bot,
 } from 'lucide-react';
 
 import {
@@ -21,17 +23,17 @@ import {
   signOut,
 } from 'aws-amplify/auth';
 
+// 1. URL do WebSocket do Chatbot via DNS customizado (sem barra no final para não quebrar o ?token=)
+const WEBSOCKET_URL = 'wss://chat.aparecida.dunga.web.ufersa.dev.br';
 
-// 1. URL do WebSocket do Chat via DNS customizado (sem barra no final para não quebrar o ?token=)
-const WEBSOCKET_URL =
-  'wss://chat.aparecida.dunga.web.ufersa.dev.br';
-
-// 2. URL da HTTP API via DNS customizado com /profile no final
-const PROFILE_API_URL =
-  'https://api.aparecida.dunga.web.ufersa.dev.br/profile';
+// 2. URLs da HTTP API via DNS customizado
+const API_BASE_URL = 'https://api.aparecida.dunga.web.ufersa.dev.br';
+const PROFILE_API_URL = `${API_BASE_URL}/profile`;
+const REVIEWS_API_URL = `${API_BASE_URL}/reviews`;
+const MESSAGES_API_URL = `${API_BASE_URL}/messages`;
 
 // --- MOCK DATA INICIAL ---
-const MOCK_USERS = {
+const MOCK_USERS: Record<string, any> = {
   u2: {
     id: 'u2',
     name: 'João Silva',
@@ -152,32 +154,41 @@ const AvatarDisplay = ({
 
 // --- COMPONENTES PRINCIPAIS ---
 
-// 1. HEADER
+// 1. HEADER (COM ÍCONE DE NOTIFICAÇÕES PARA USUÁRIOS LOGADOS)
 const Header = ({
   currentUser,
   currentView,
   setView,
   handleLogout,
   onUserClick,
+  notifications,
+  onOpenNotification,
 }: {
   currentUser: any;
   currentView: string;
   setView: (view: string) => void;
   handleLogout: () => void;
   onUserClick: (user: any) => void;
+  notifications: any[];
+  onOpenNotification: (notif: any) => void;
 }) => {
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
   const NavButton = ({
     view,
     icon: Icon,
     label,
+    badge,
   }: {
     view: string;
     icon: any;
     label: string;
+    badge?: number;
   }) => (
     <button
       onClick={() => setView(view)}
-      className={`flex items-center space-x-1 px-3 py-2 rounded-md transition-colors ${
+      className={`flex items-center space-x-1 px-3 py-2 rounded-md transition-colors relative ${
         currentView === view
           ? 'bg-indigo-100 text-indigo-700 font-medium'
           : 'text-gray-600 hover:bg-gray-100'
@@ -185,6 +196,11 @@ const Header = ({
     >
       <Icon size={18} />
       <span>{label}</span>
+      {badge && badge > 0 ? (
+        <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+          {badge}
+        </span>
+      ) : null}
     </button>
   );
 
@@ -208,16 +224,100 @@ const Header = ({
 
             {currentUser && (
               <NavButton
-                view="chat"
+                view="messages"
                 icon={MessageCircle}
                 label="Mensagens"
+                badge={unreadCount}
               />
             )}
           </nav>
 
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
             {currentUser ? (
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-3">
+                {/* Ícone de Notificações */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowNotifDropdown((prev) => !prev)}
+                    className="relative p-2 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded-full transition-colors"
+                    title="Notificações"
+                  >
+                    <Bell size={20} />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {showNotifDropdown && (
+                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-50 overflow-hidden">
+                      <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                        <span className="font-semibold text-sm text-gray-800">
+                          Notificações
+                        </span>
+                        <button
+                          onClick={() => setShowNotifDropdown(false)}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+
+                      <div className="max-h-72 overflow-y-auto divide-y divide-gray-100">
+                        {notifications.length === 0 ? (
+                          <div className="p-6 text-center text-sm text-gray-400">
+                            Nenhuma notificação no momento.
+                          </div>
+                        ) : (
+                          notifications.map((notif) => (
+                            <button
+                              key={notif.id}
+                              onClick={() => {
+                                setShowNotifDropdown(false);
+                                onOpenNotification(notif);
+                              }}
+                              className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors flex items-start gap-3 ${
+                                !notif.read ? 'bg-indigo-50/50' : ''
+                              }`}
+                            >
+                              <AvatarDisplay
+                                alt={notif.fromName}
+                                className="w-8 h-8 rounded-full text-xs mt-0.5"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs text-gray-900">
+                                  <span className="font-semibold">
+                                    {notif.fromName}
+                                  </span>{' '}
+                                  enviou uma mensagem:
+                                </p>
+                                <p className="text-xs text-gray-600 truncate mt-0.5">
+                                  "{notif.text}"
+                                </p>
+                                <span className="text-[10px] text-gray-400 mt-1 block">
+                                  {notif.createdAt
+                                    ? new Date(notif.createdAt).toLocaleTimeString(
+                                        [],
+                                        {
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                        }
+                                      )
+                                    : ''}
+                                </span>
+                              </div>
+                              {!notif.read && (
+                                <span className="w-2 h-2 rounded-full bg-indigo-600 mt-2 shrink-0" />
+                              )}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div
                   className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 px-2 py-1 rounded-md transition-colors"
                   onClick={() => onUserClick(currentUser)}
@@ -227,7 +327,7 @@ const Header = ({
                     alt={currentUser.name}
                     className="w-8 h-8 rounded-full border border-gray-300"
                   />
-                  <span className="text-sm font-medium text-gray-700">
+                  <span className="hidden sm:inline text-sm font-medium text-gray-700">
                     {currentUser.name.split(' ')[0]}
                   </span>
                 </div>
@@ -297,7 +397,6 @@ const ProfileView = ({
         throw new Error('Sessão expirada. Faça login novamente.');
       }
 
-      // Envia operação PUT para /profile atualizando dados cadastrais e imagem
       const response = await fetch(PROFILE_API_URL, {
         method: 'PUT',
         headers: {
@@ -319,7 +418,6 @@ const ProfileView = ({
         throw new Error(result.error || 'Erro ao atualizar perfil na AWS.');
       }
 
-      // Adiciona query string de timestamp na URL do S3 para forçar atualização imediata na tela
       const separator = result.profile?.avatarUrl?.includes('?') ? '&' : '?';
       const updatedAvatarUrl = result.profile?.avatarUrl
         ? `${result.profile.avatarUrl}${separator}t=${Date.now()}`
@@ -513,9 +611,7 @@ const ProfileView = ({
                   {review.book.title}
                 </h4>
                 <RatingStars rating={review.rating} />
-                <p className="text-gray-700 mt-2 text-sm">
-                  "{review.text}"
-                </p>
+                <p className="text-gray-700 mt-2 text-sm">"{review.text}"</p>
                 <span className="text-xs text-gray-400 mt-2 block">
                   {new Date(review.createdAt).toLocaleDateString()}
                 </span>
@@ -528,17 +624,19 @@ const ProfileView = ({
   );
 };
 
-// 3. FEED E COMENTÁRIOS
+// 3. FEED E COMENTÁRIOS (APENAS USUÁRIOS LOGADOS PODEM CURTIR E COMENTAR)
 const FeedView = ({
   currentUser,
   reviews,
   actions,
   onUserClick,
+  onRequireAuth,
 }: {
   currentUser: any;
   reviews: any[];
   actions: any;
   onUserClick: (user: any) => void;
+  onRequireAuth: () => void;
 }) => {
   const [activeCommentReview, setActiveCommentReview] = useState<string | null>(
     null
@@ -551,14 +649,14 @@ const FeedView = ({
   const [replyText, setReplyText] = useState('');
 
   const submitComment = (reviewId: string) => {
-    if (!commentText.trim()) return;
+    if (!currentUser || !commentText.trim()) return;
 
     actions.onAddComment(reviewId, commentText);
     setCommentText('');
   };
 
   const submitReply = (reviewId: string, commentId: string) => {
-    if (!replyText.trim()) return;
+    if (!currentUser || !replyText.trim()) return;
 
     actions.onAddReply(reviewId, commentId, replyText);
     setReplyText('');
@@ -646,12 +744,18 @@ const FeedView = ({
 
                 <div className="flex items-center pt-3 border-t border-gray-100 space-x-6">
                   <button
-                    onClick={() => actions.onToggleLikeReview(review.id)}
-                    disabled={!currentUser}
-                    className={`flex items-center space-x-1.5 transition-colors ${
-                      !currentUser
-                        ? 'opacity-50 cursor-not-allowed'
-                        : hasLikedReview
+                    onClick={() => {
+                      if (!currentUser) {
+                        onRequireAuth();
+                        return;
+                      }
+                      actions.onToggleLikeReview(review.id);
+                    }}
+                    title={
+                      !currentUser ? 'Faça login para curtir' : 'Curtir resenha'
+                    }
+                    className={`flex items-center space-x-1.5 transition-colors cursor-pointer ${
+                      hasLikedReview
                         ? 'text-red-500'
                         : 'text-gray-500 hover:text-red-500'
                     }`}
@@ -690,7 +794,7 @@ const FeedView = ({
                         comment.likedBy.includes(currentUser.id);
 
                       const isReplying =
-                        replyingTo?.commentId === comment.id;
+                        currentUser && replyingTo?.commentId === comment.id;
 
                       return (
                         <div key={comment.id} className="text-sm">
@@ -718,33 +822,37 @@ const FeedView = ({
 
                               <div className="flex items-center gap-3 mt-1 ml-1 text-xs text-gray-500 font-medium">
                                 <button
-                                  disabled={!currentUser}
-                                  onClick={() =>
+                                  onClick={() => {
+                                    if (!currentUser) {
+                                      onRequireAuth();
+                                      return;
+                                    }
                                     actions.onToggleLikeComment(
                                       review.id,
                                       comment.id
-                                    )
-                                  }
+                                    );
+                                  }}
                                   className={`${
                                     hasLikedComment
                                       ? 'text-red-500'
                                       : 'hover:text-gray-800'
-                                  } ${!currentUser ? 'opacity-50' : ''}`}
+                                  }`}
                                 >
                                   Curtir ({comment.likedBy.length})
                                 </button>
 
                                 <button
-                                  disabled={!currentUser}
-                                  onClick={() =>
+                                  onClick={() => {
+                                    if (!currentUser) {
+                                      onRequireAuth();
+                                      return;
+                                    }
                                     setReplyingTo({
                                       reviewId: review.id,
                                       commentId: comment.id,
-                                    })
-                                  }
-                                  className={`hover:text-gray-800 ${
-                                    !currentUser ? 'opacity-50' : ''
-                                  }`}
+                                    });
+                                  }}
+                                  className="hover:text-gray-800"
                                 >
                                   Responder
                                 </button>
@@ -789,20 +897,21 @@ const FeedView = ({
 
                                           <div className="mt-1 ml-1 text-[11px] text-gray-500 font-medium">
                                             <button
-                                              disabled={!currentUser}
-                                              onClick={() =>
+                                              onClick={() => {
+                                                if (!currentUser) {
+                                                  onRequireAuth();
+                                                  return;
+                                                }
                                                 actions.onToggleLikeReply(
                                                   review.id,
                                                   comment.id,
                                                   reply.id
-                                                )
-                                              }
+                                                );
+                                              }}
                                               className={`${
                                                 hasLikedReply
                                                   ? 'text-red-500'
                                                   : 'hover:text-gray-800'
-                                              } ${
-                                                !currentUser ? 'opacity-50' : ''
                                               }`}
                                             >
                                               Curtir ({reply.likedBy.length})
@@ -825,6 +934,10 @@ const FeedView = ({
                                     }
                                     placeholder={`Respondendo a ${comment.user.name}...`}
                                     className="flex-1 text-sm rounded-full border-gray-300 px-3 py-1.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-white border shadow-sm"
+                                    onKeyDown={(e) =>
+                                      e.key === 'Enter' &&
+                                      submitReply(review.id, comment.id)
+                                    }
                                   />
 
                                   <button
@@ -871,9 +984,13 @@ const FeedView = ({
                       </button>
                     </div>
                   ) : (
-                    <div className="text-center text-sm text-gray-500 mt-4 bg-white p-2 rounded-md border border-gray-200">
-                      Faça login para comentar.
-                    </div>
+                    <button
+                      type="button"
+                      onClick={onRequireAuth}
+                      className="w-full text-center text-sm text-indigo-600 font-medium mt-4 bg-white hover:bg-indigo-50 p-2.5 rounded-md border border-indigo-200 transition-colors"
+                    >
+                      Faça login para curtir ou comentar
+                    </button>
                   )}
                 </div>
               )}
@@ -889,9 +1006,11 @@ const FeedView = ({
 const SearchView = ({
   currentUser,
   onAddReview,
+  onRequireAuth,
 }: {
   currentUser: any;
   onAddReview: (review: any) => void;
+  onRequireAuth: () => void;
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [results, setResults] = useState<any[]>([]);
@@ -938,6 +1057,7 @@ const SearchView = ({
   };
 
   const submitReview = () => {
+    if (!currentUser) return;
     if (rating === 0 || !reviewText.trim()) {
       alert('Preencha a nota e o texto!');
       return;
@@ -1014,12 +1134,17 @@ const SearchView = ({
 
                 <div className="mt-auto pt-4 border-t border-gray-100">
                   <button
-                    disabled={!currentUser}
-                    onClick={() => setSelectedBook(book)}
+                    onClick={() => {
+                      if (!currentUser) {
+                        onRequireAuth();
+                        return;
+                      }
+                      setSelectedBook(book);
+                    }}
                     className={`w-full py-2 rounded-md font-medium text-sm transition-colors ${
                       currentUser
                         ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
                     }`}
                   >
                     {currentUser
@@ -1033,7 +1158,7 @@ const SearchView = ({
         </div>
       )}
 
-      {selectedBook && (
+      {selectedBook && currentUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60] fade-in">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden">
             <div className="flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50">
@@ -1097,12 +1222,275 @@ const SearchView = ({
   );
 };
 
-// 5. CHAT COM AMAZON API GATEWAY WEBSOCKET + LAMBDA + GEMINI
-const ChatView = ({
+// 5. MENSAGENS DIRETAS ENTRE PERFIS (PERSISTIDAS NO DYNAMODB VIA /messages)
+const DirectMessagesView = ({
   currentUser,
+  contacts,
+  initialRecipient,
+  onNotificationsUpdated,
 }: {
   currentUser: any;
+  contacts: any[];
+  initialRecipient: any;
+  onNotificationsUpdated: (notifs: any[]) => void;
 }) => {
+  const [selectedContact, setSelectedContact] = useState<any>(
+    initialRecipient || contacts[0] || null
+  );
+  const [messages, setMessages] = useState<any[]>([]);
+  const [inputMsg, setInputMsg] = useState('');
+  const [isLoadingMsgs, setIsLoadingMsgs] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+
+  useEffect(() => {
+    if (initialRecipient) {
+      setSelectedContact(initialRecipient);
+    }
+  }, [initialRecipient]);
+
+  const fetchConversation = async (contactId: string, showLoader = false) => {
+    if (!currentUser || !contactId) return;
+    if (showLoader) setIsLoadingMsgs(true);
+
+    try {
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString();
+      if (!idToken) return;
+
+      const res = await fetch(
+        `${MESSAGES_API_URL}?with=${encodeURIComponent(contactId)}`,
+        {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${idToken}` },
+        }
+      );
+
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(data.messages || []);
+        if (data.notifications) {
+          onNotificationsUpdated(data.notifications);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar mensagens:', error);
+    } finally {
+      if (showLoader) setIsLoadingMsgs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedContact) return;
+    fetchConversation(selectedContact.id, true);
+
+    const interval = setInterval(() => {
+      fetchConversation(selectedContact.id, false);
+    }, 8000);
+
+    return () => clearInterval(interval);
+  }, [selectedContact?.id]);
+
+  const handleSendDirectMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = inputMsg.trim();
+    if (!currentUser || !selectedContact || !text || isSending) return;
+
+    setIsSending(true);
+    setInputMsg('');
+
+    try {
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString();
+      if (!idToken) return;
+
+      const res = await fetch(MESSAGES_API_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          toId: selectedContact.id,
+          fromName: currentUser.name,
+          text,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.message) {
+          setMessages((prev) => [...prev, data.message]);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao enviar mensagem:', error);
+      alert('Não foi possível enviar a mensagem. Tente novamente.');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto py-6 px-4 h-[calc(100vh-80px)] flex flex-col fade-in">
+      <div className="mb-4">
+        <h2 className="text-2xl font-bold text-gray-800">Mensagens</h2>
+        <p className="text-sm text-gray-500 mt-1">
+          Converse diretamente com outros leitores do BookConnect.
+        </p>
+      </div>
+
+      <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex min-h-[420px]">
+        {/* Lista de Perfis */}
+        <div className="w-1/3 sm:w-72 border-r border-gray-200 bg-gray-50 flex flex-col">
+          <div className="p-3 border-b border-gray-200 font-semibold text-sm text-gray-700">
+            Perfis da Comunidade
+          </div>
+          <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+            {contacts.map((contact) => {
+              const isSelected = selectedContact?.id === contact.id;
+              return (
+                <button
+                  key={contact.id}
+                  onClick={() => setSelectedContact(contact)}
+                  className={`w-full p-3 flex items-center gap-3 text-left transition-colors ${
+                    isSelected
+                      ? 'bg-indigo-50 border-r-4 border-indigo-600'
+                      : 'hover:bg-gray-100'
+                  }`}
+                >
+                  <AvatarDisplay
+                    src={contact.avatar}
+                    alt={contact.name}
+                    className="w-10 h-10 rounded-full text-sm"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-sm text-gray-900 truncate">
+                      {contact.name}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {contact.bio || 'Leitor do BookConnect'}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Área da Conversa */}
+        <div className="flex-1 flex flex-col">
+          {selectedContact ? (
+            <>
+              <div className="p-3 border-b border-gray-200 bg-white flex items-center gap-3">
+                <AvatarDisplay
+                  src={selectedContact.avatar}
+                  alt={selectedContact.name}
+                  className="w-10 h-10 rounded-full"
+                />
+                <div>
+                  <p className="font-semibold text-gray-900">
+                    {selectedContact.name}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {selectedContact.bio || 'Leitor do BookConnect'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex-1 p-4 overflow-y-auto bg-[#F9FAFB] space-y-3">
+                {isLoadingMsgs ? (
+                  <div className="text-center text-gray-400 mt-10 text-sm">
+                    Carregando conversa...
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="text-center text-gray-400 mt-10">
+                    <MessageCircle
+                      size={32}
+                      className="mx-auto mb-2 opacity-50"
+                    />
+                    <p className="text-sm font-medium">
+                      Nenhuma mensagem com {selectedContact.name} ainda.
+                    </p>
+                    <p className="text-xs mt-1">
+                      Envie a primeira mensagem abaixo!
+                    </p>
+                  </div>
+                ) : (
+                  messages.map((msg) => {
+                    const isMine = msg.fromId === currentUser.id;
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`flex ${
+                          isMine ? 'justify-end' : 'justify-start'
+                        }`}
+                      >
+                        <div
+                          className={`max-w-[80%] rounded-2xl px-4 py-2.5 shadow-sm ${
+                            isMine
+                              ? 'bg-indigo-600 text-white rounded-br-sm'
+                              : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
+                          }`}
+                        >
+                          <p className="text-sm whitespace-pre-wrap break-words">
+                            {msg.text}
+                          </p>
+                          <span
+                            className={`text-[10px] block mt-1 text-right ${
+                              isMine ? 'text-indigo-200' : 'text-gray-400'
+                            }`}
+                          >
+                            {msg.createdAt
+                              ? new Date(msg.createdAt).toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : ''}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="p-3 bg-white border-t border-gray-200">
+                <form
+                  onSubmit={handleSendDirectMessage}
+                  className="flex gap-2"
+                >
+                  <input
+                    type="text"
+                    value={inputMsg}
+                    onChange={(e) => setInputMsg(e.target.value)}
+                    placeholder={`Escreva uma mensagem para ${selectedContact.name}...`}
+                    className="flex-1 bg-gray-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-full px-4 py-2 text-sm outline-none transition-all"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!inputMsg.trim() || isSending}
+                    className="bg-indigo-600 text-white p-2.5 rounded-full hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                    title="Enviar mensagem"
+                  >
+                    <Send size={18} />
+                  </button>
+                </form>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
+              Selecione um perfil à esquerda para conversar.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 6. CHATBOT FLUTUANTE NO CANTO INFERIOR DIREITO (MESMA LÓGICA WEBSOCKET + LAMBDA + GEMINI)
+const FloatingChatbot = ({ currentUser }: { currentUser: any }) => {
+  const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<
     {
       id: string;
@@ -1120,7 +1508,12 @@ const ChatView = ({
   const [isWaitingResponse, setIsWaitingResponse] = useState(false);
   const [connectionError, setConnectionError] = useState('');
 
-  const socketRef = React.useRef<WebSocket | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isWaitingResponse, isOpen]);
 
   useEffect(() => {
     let socket: WebSocket | null = null;
@@ -1149,7 +1542,6 @@ const ChatView = ({
 
         socket.onopen = () => {
           if (!isMounted) return;
-
           setConnectionStatus('connected');
           setConnectionError('');
         };
@@ -1161,10 +1553,7 @@ const ChatView = ({
             const data = JSON.parse(event.data);
 
             const responseText =
-              data.answer ??
-              data.response ??
-              data.message ??
-              data.text;
+              data.answer ?? data.response ?? data.message ?? data.text;
 
             if (responseText) {
               setMessages((prev) => [
@@ -1212,7 +1601,6 @@ const ChatView = ({
 
         socket.onerror = (event) => {
           console.error('Erro na conexão WebSocket:', event);
-
           if (!isMounted) return;
 
           setConnectionStatus('error');
@@ -1224,15 +1612,12 @@ const ChatView = ({
 
         socket.onclose = (event) => {
           if (!isMounted) return;
-
           setConnectionStatus('disconnected');
           setIsWaitingResponse(false);
-
           console.log('WebSocket encerrado:', event.code, event.reason);
         };
       } catch (error) {
         console.error('Erro ao conectar ao WebSocket:', error);
-
         if (!isMounted) return;
 
         setConnectionStatus('error');
@@ -1248,11 +1633,9 @@ const ChatView = ({
 
     return () => {
       isMounted = false;
-
       if (socket) {
         socket.close();
       }
-
       socketRef.current = null;
     };
   }, []);
@@ -1261,7 +1644,6 @@ const ChatView = ({
     e.preventDefault();
 
     const question = inputMsg.trim();
-
     if (!question) return;
 
     const socket = socketRef.current;
@@ -1304,173 +1686,165 @@ const ChatView = ({
   };
 
   return (
-    <div className="max-w-5xl mx-auto py-6 px-4 h-[calc(100vh-80px)] flex flex-col fade-in">
-      <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800">
-            Chat com Gemini
-          </h2>
-
-          <p className="text-sm text-gray-500 mt-1">
-            Faça perguntas e converse com o assistente do BookConnect.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span
-            className={`w-2.5 h-2.5 rounded-full ${
-              connectionStatus === 'connected'
-                ? 'bg-green-500'
-                : connectionStatus === 'connecting'
-                ? 'bg-yellow-500'
-                : 'bg-red-500'
-            }`}
-          />
-
-          <span className="text-sm text-gray-600">
-            {connectionStatus === 'connected'
-              ? 'Conectado'
-              : connectionStatus === 'connecting'
-              ? 'Conectando...'
-              : connectionStatus === 'error'
-              ? 'Erro na conexão'
-              : 'Desconectado'}
-          </span>
-
-          {connectionStatus !== 'connected' && (
-            <button
-              type="button"
-              onClick={handleReconnect}
-              className="text-sm text-indigo-600 hover:underline ml-2"
-            >
-              Reconectar
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col min-h-[400px]">
-        <div className="p-3 border-b border-gray-200 bg-gray-50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
-              <MessageCircle size={20} />
-            </div>
-
-            <div>
-              <p className="font-semibold text-gray-900">
-                Assistente BookConnect
-              </p>
-
-              <p className="text-xs text-gray-500">
-                Usuário: {currentUser?.name || 'Usuário autenticado'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 p-4 overflow-y-auto bg-[#F9FAFB] space-y-4">
-          {messages.length === 0 && (
-            <div className="text-center text-gray-400 mt-10">
-              <MessageCircle size={36} className="mx-auto mb-3 opacity-50" />
-
-              <p className="font-medium">
-                Olá! Envie uma pergunta para começar.
-              </p>
-
-              <p className="text-sm mt-1">
-                Sua mensagem será enviada à API Gateway e processada pela Lambda.
-              </p>
-            </div>
-          )}
-
-          {messages.map((msg) => {
-            const isUser = msg.sender === 'user';
-
-            return (
-              <div
-                key={msg.id}
-                className={`flex ${
-                  isUser ? 'justify-end' : 'justify-start'
-                }`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-sm ${
-                    isUser
-                      ? 'bg-indigo-600 text-white rounded-br-sm'
-                      : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
-                  }`}
-                >
-                  <p className="text-sm whitespace-pre-wrap break-words">
-                    {msg.text}
-                  </p>
-
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+      {isOpen && (
+        <div className="mb-3 w-[350px] sm:w-[400px] h-[500px] bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col fade-in">
+          <div className="p-3 bg-indigo-600 text-white flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
+                <Bot size={20} />
+              </div>
+              <div>
+                <p className="font-semibold text-sm leading-tight">
+                  Assistente BookConnect
+                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
                   <span
-                    className={`text-[10px] block mt-2 text-right ${
-                      isUser ? 'text-indigo-200' : 'text-gray-400'
+                    className={`w-2 h-2 rounded-full ${
+                      connectionStatus === 'connected'
+                        ? 'bg-green-400'
+                        : connectionStatus === 'connecting'
+                        ? 'bg-yellow-300'
+                        : 'bg-red-400'
                     }`}
-                  >
-                    {msg.timestamp}
+                  />
+                  <span className="text-[11px] text-indigo-100">
+                    {connectionStatus === 'connected'
+                      ? 'Conectado (Gemini)'
+                      : connectionStatus === 'connecting'
+                      ? 'Conectando...'
+                      : 'Desconectado'}
                   </span>
                 </div>
               </div>
-            );
-          })}
+            </div>
 
-          {isWaitingResponse && (
-            <div className="flex justify-start">
-              <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-4 py-3 text-sm text-gray-500">
-                Gemini está processando sua pergunta...
+            <div className="flex items-center gap-2">
+              {connectionStatus !== 'connected' && (
+                <button
+                  type="button"
+                  onClick={handleReconnect}
+                  className="text-xs bg-white/20 hover:bg-white/30 px-2 py-1 rounded"
+                >
+                  Reconectar
+                </button>
+              )}
+              <button
+                onClick={() => setIsOpen(false)}
+                className="text-indigo-100 hover:text-white p-1"
+                title="Fechar chat"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 p-4 overflow-y-auto bg-[#F9FAFB] space-y-3">
+            {messages.length === 0 && (
+              <div className="text-center text-gray-400 mt-10">
+                <Bot size={36} className="mx-auto mb-2 opacity-50" />
+                <p className="font-medium text-sm">
+                  Olá, {currentUser?.name?.split(' ')[0]}!
+                </p>
+                <p className="text-xs mt-1">
+                  Envie uma pergunta para conversar com o assistente do
+                  BookConnect.
+                </p>
               </div>
+            )}
+
+            {messages.map((msg) => {
+              const isUser = msg.sender === 'user';
+
+              return (
+                <div
+                  key={msg.id}
+                  className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 shadow-sm ${
+                      isUser
+                        ? 'bg-indigo-600 text-white rounded-br-sm'
+                        : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
+                    }`}
+                  >
+                    <p className="text-sm whitespace-pre-wrap break-words">
+                      {msg.text}
+                    </p>
+                    <span
+                      className={`text-[10px] block mt-1.5 text-right ${
+                        isUser ? 'text-indigo-200' : 'text-gray-400'
+                      }`}
+                    >
+                      {msg.timestamp}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+
+            {isWaitingResponse && (
+              <div className="flex justify-start">
+                <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-3.5 py-2.5 text-xs text-gray-500">
+                  Gemini está processando sua pergunta...
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {connectionError && (
+            <div className="px-3 py-2 bg-red-50 border-t border-red-100 text-xs text-red-600">
+              {connectionError}
             </div>
           )}
-        </div>
 
-        {connectionError && (
-          <div className="px-4 py-2 bg-red-50 border-t border-red-100 text-sm text-red-600">
-            {connectionError}
+          <div className="p-3 bg-white border-t border-gray-200">
+            <form onSubmit={handleSend} className="flex gap-2">
+              <input
+                type="text"
+                value={inputMsg}
+                onChange={(e) => setInputMsg(e.target.value)}
+                placeholder={
+                  connectionStatus === 'connected'
+                    ? 'Digite sua pergunta...'
+                    : 'Aguardando conexão...'
+                }
+                disabled={connectionStatus !== 'connected'}
+                className="flex-1 bg-gray-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-full px-4 py-2 text-sm outline-none transition-all disabled:opacity-60"
+              />
+
+              <button
+                type="submit"
+                disabled={
+                  !inputMsg.trim() ||
+                  connectionStatus !== 'connected' ||
+                  isWaitingResponse
+                }
+                className="bg-indigo-600 text-white p-2.5 rounded-full hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                title="Enviar pergunta"
+              >
+                <Send size={16} />
+              </button>
+            </form>
           </div>
-        )}
-
-        <div className="p-3 bg-white border-t border-gray-200">
-          <form onSubmit={handleSend} className="flex gap-2">
-            <input
-              type="text"
-              value={inputMsg}
-              onChange={(e) => setInputMsg(e.target.value)}
-              placeholder={
-                connectionStatus === 'connected'
-                  ? 'Digite sua pergunta...'
-                  : 'Aguardando conexão com o chat...'
-              }
-              disabled={connectionStatus !== 'connected'}
-              className="flex-1 bg-gray-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-full px-4 py-2 text-sm outline-none transition-all disabled:opacity-60"
-            />
-
-            <button
-              type="submit"
-              disabled={
-                !inputMsg.trim() ||
-                connectionStatus !== 'connected' ||
-                isWaitingResponse
-              }
-              className="bg-indigo-600 text-white p-3 rounded-full hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-              title="Enviar pergunta"
-            >
-              <Send size={18} />
-            </button>
-          </form>
         </div>
-      </div>
+      )}
+
+      {/* Botão Flutuante do Chatbot */}
+      <button
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="w-14 h-14 rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 hover:scale-105 transition-all flex items-center justify-center"
+        title="Abrir Assistente IA (BookConnect)"
+      >
+        {isOpen ? <X size={24} /> : <Bot size={26} />}
+      </button>
     </div>
   );
 };
 
-// 6. AUTH — AMAZON COGNITO
-const AuthView = ({
-  error,
-}: {
-  error: string;
-}) => {
+// 7. AUTH — AMAZON COGNITO
+const AuthView = ({ error }: { error: string }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [isRedirecting, setIsRedirecting] = useState(false);
 
@@ -1549,11 +1923,53 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentView, setCurrentView] = useState('feed');
   const [reviews, setReviews] = useState<any[]>(INITIAL_REVIEWS);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [selectedChatUser, setSelectedChatUser] = useState<any>(null);
 
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState('');
 
   const [viewedUser, setViewedUser] = useState<any>(null);
+
+  // Carrega as resenhas, curtidas e comentários salvos no DynamoDB (público para visitantes)
+  useEffect(() => {
+    const loadReviews = async () => {
+      try {
+        const res = await fetch(REVIEWS_API_URL, { method: 'GET' });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.reviews) && data.reviews.length > 0) {
+            setReviews(data.reviews);
+          }
+        }
+      } catch (err) {
+        console.log('Usando resenhas iniciais enquanto /reviews não responde.');
+      }
+    };
+
+    loadReviews();
+  }, []);
+
+  // Persiste alterações do feed no DynamoDB (somente usuário autenticado)
+  const persistReviews = async (updatedReviews: any[]) => {
+    if (!currentUser) return;
+    try {
+      const session = await fetchAuthSession();
+      const idToken = session.tokens?.idToken?.toString();
+      if (!idToken) return;
+
+      await fetch(REVIEWS_API_URL, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reviews: updatedReviews }),
+      });
+    } catch (err) {
+      console.error('Erro ao salvar interações do feed no DynamoDB:', err);
+    }
+  };
 
   // Recupera a sessão Cognito e carrega os dados + foto do DynamoDB/S3 via GET /profile
   useEffect(() => {
@@ -1576,7 +1992,6 @@ export default function App() {
         let savedBio = 'Estudante e apaixonada por livros.';
         let savedAvatarUrl = typeof picture === 'string' ? picture : '';
 
-        // Busca dados cadastrais e foto salvos no DynamoDB / S3
         if (idToken) {
           try {
             const profileRes = await fetch(PROFILE_API_URL, {
@@ -1592,10 +2007,12 @@ export default function App() {
               if (profileData.bio) savedBio = profileData.bio;
               if (profileData.avatarUrl) {
                 savedAvatarUrl = profileData.avatarUrl;
-}
+              }
             }
           } catch (err) {
-            console.log('Perfil ainda não salvo no DynamoDB, usando dados do Cognito.');
+            console.log(
+              'Perfil ainda não salvo no DynamoDB, usando dados do Cognito.'
+            );
           }
         }
 
@@ -1616,25 +2033,109 @@ export default function App() {
     loadAuthenticatedUser();
   }, []);
 
+  // Busca notificações de novas mensagens a cada 15 segundos para usuários logados
   useEffect(() => {
-    if (currentView === 'chat' && !currentUser && !authLoading) {
+    if (!currentUser) {
+      setNotifications([]);
+      return;
+    }
+
+    const fetchNotifications = async () => {
+      try {
+        const session = await fetchAuthSession();
+        const idToken = session.tokens?.idToken?.toString();
+        if (!idToken) return;
+
+        const res = await fetch(MESSAGES_API_URL, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setNotifications(data.notifications || []);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar notificações:', err);
+      }
+    };
+
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 15000);
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
+  // Bloqueia acesso à aba de mensagens para visitantes não logados
+  useEffect(() => {
+    if (currentView === 'messages' && !currentUser && !authLoading) {
       setCurrentView('auth');
     }
   }, [currentView, currentUser, authLoading]);
+
+  // Monta lista de perfis disponíveis para trocar mensagens (exclui o usuário atual)
+  const availableContacts = React.useMemo(() => {
+    const map = new Map<string, any>();
+
+    Object.values(MOCK_USERS).forEach((u) => map.set(u.id, u));
+
+    reviews.forEach((r) => {
+      if (r.user?.id) map.set(r.user.id, r.user);
+      (r.comments || []).forEach((c: any) => {
+        if (c.user?.id) map.set(c.user.id, c.user);
+        (c.replies || []).forEach((rep: any) => {
+          if (rep.user?.id) map.set(rep.user.id, rep.user);
+        });
+      });
+    });
+
+    notifications.forEach((n) => {
+      if (n.fromId && !map.has(n.fromId)) {
+        map.set(n.fromId, {
+          id: n.fromId,
+          name: n.fromName || 'Usuário',
+          avatar: '',
+          bio: 'Leitor do BookConnect',
+        });
+      }
+    });
+
+    if (currentUser?.id) {
+      map.delete(currentUser.id);
+    }
+
+    return Array.from(map.values());
+  }, [reviews, notifications, currentUser]);
 
   const handleUserClick = (user: any) => {
     setViewedUser(user);
     setCurrentView('profile');
   };
 
-  const handleSendMessageClick = () => {
-    setCurrentView('chat');
+  const handleSendMessageClick = (targetUser: any) => {
+    if (!currentUser) {
+      setCurrentView('auth');
+      return;
+    }
+    setSelectedChatUser(targetUser);
+    setCurrentView('messages');
+  };
+
+  const handleOpenNotification = (notif: any) => {
+    if (!currentUser) return;
+    const found = availableContacts.find((c) => c.id === notif.fromId) || {
+      id: notif.fromId,
+      name: notif.fromName || 'Usuário',
+      avatar: '',
+      bio: 'Leitor do BookConnect',
+    };
+    setSelectedChatUser(found);
+    setCurrentView('messages');
   };
 
   const handleLogout = async () => {
     try {
       await signOut();
       setCurrentUser(null);
+      setNotifications([]);
       setCurrentView('feed');
       setViewedUser(null);
     } catch (error) {
@@ -1648,60 +2149,63 @@ export default function App() {
     setViewedUser(updatedUser);
 
     const updateObj = (obj: any) =>
-      obj.user.id === updatedUser.id
-        ? { ...obj, user: updatedUser }
-        : obj;
+      obj.user.id === updatedUser.id ? { ...obj, user: updatedUser } : obj;
 
-    setReviews((prev) =>
-      prev.map((review) => {
+    setReviews((prev) => {
+      const updated = prev.map((review) => {
         const updatedReview = updateObj(review);
 
-        updatedReview.comments = updatedReview.comments.map(
-          (comment: any) => {
-            const updatedComment = updateObj(comment);
+        updatedReview.comments = updatedReview.comments.map((comment: any) => {
+          const updatedComment = updateObj(comment);
 
-            updatedComment.replies = updatedComment.replies.map(
-              (reply: any) => updateObj(reply)
-            );
+          updatedComment.replies = updatedComment.replies.map((reply: any) =>
+            updateObj(reply)
+          );
 
-            return updatedComment;
-          }
-        );
+          return updatedComment;
+        });
 
         return updatedReview;
-      })
-    );
+      });
+      persistReviews(updated);
+      return updated;
+    });
   };
 
-  // --- LÓGICA DE CURTIDAS E COMENTÁRIOS ---
+  // --- LÓGICA DE CURTIDAS E COMENTÁRIOS (APENAS LOGADOS + SALVANDO NO DYNAMODB) ---
   const toggleArray = (arr: string[], value: string) =>
     arr.includes(value)
       ? arr.filter((item) => item !== value)
       : [...arr, value];
 
   const handleLikeReview = (reviewId: string) => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      setCurrentView('auth');
+      return;
+    };
 
-    setReviews((prev) =>
-      prev.map((review) =>
+    setReviews((prev) => {
+      const updated = prev.map((review) =>
         review.id === reviewId
           ? {
               ...review,
               likedBy: toggleArray(review.likedBy, currentUser.id),
             }
           : review
-      )
-    );
+      );
+      persistReviews(updated);
+      return updated;
+    });
   };
 
-  const handleLikeComment = (
-    reviewId: string,
-    commentId: string
-  ) => {
-    if (!currentUser) return;
+  const handleLikeComment = (reviewId: string, commentId: string) => {
+    if (!currentUser) {
+      setCurrentView('auth');
+      return;
+    };
 
-    setReviews((prev) =>
-      prev.map((review) =>
+    setReviews((prev) => {
+      const updated = prev.map((review) =>
         review.id === reviewId
           ? {
               ...review,
@@ -1709,17 +2213,16 @@ export default function App() {
                 comment.id === commentId
                   ? {
                       ...comment,
-                      likedBy: toggleArray(
-                        comment.likedBy,
-                        currentUser.id
-                      ),
+                      likedBy: toggleArray(comment.likedBy, currentUser.id),
                     }
                   : comment
               ),
             }
           : review
-      )
-    );
+      );
+      persistReviews(updated);
+      return updated;
+    });
   };
 
   const handleLikeReply = (
@@ -1729,8 +2232,8 @@ export default function App() {
   ) => {
     if (!currentUser) return;
 
-    setReviews((prev) =>
-      prev.map((review) =>
+    setReviews((prev) => {
+      const updated = prev.map((review) =>
         review.id === reviewId
           ? {
               ...review,
@@ -1754,15 +2257,17 @@ export default function App() {
               ),
             }
           : review
-      )
-    );
+      );
+      persistReviews(updated);
+      return updated;
+    });
   };
 
-  const handleAddComment = (
-    reviewId: string,
-    text: string
-  ) => {
-    if (!currentUser) return;
+  const handleAddComment = (reviewId: string, text: string) => {
+    if (!currentUser) {
+      setCurrentView('auth');
+      return;
+    };
 
     const newComment = {
       id: Date.now().toString(),
@@ -1772,16 +2277,18 @@ export default function App() {
       replies: [],
     };
 
-    setReviews((prev) =>
-      prev.map((review) =>
+    setReviews((prev) => {
+      const updated = prev.map((review) =>
         review.id === reviewId
           ? {
               ...review,
               comments: [...review.comments, newComment],
             }
           : review
-      )
-    );
+      );
+      persistReviews(updated);
+      return updated;
+    });
   };
 
   const handleAddReply = (
@@ -1798,8 +2305,8 @@ export default function App() {
       likedBy: [],
     };
 
-    setReviews((prev) =>
-      prev.map((review) =>
+    setReviews((prev) => {
+      const updated = prev.map((review) =>
         review.id === reviewId
           ? {
               ...review,
@@ -1813,8 +2320,10 @@ export default function App() {
               ),
             }
           : review
-      )
-    );
+      );
+      persistReviews(updated);
+      return updated;
+    });
   };
 
   const handleAddReview = ({
@@ -1839,7 +2348,11 @@ export default function App() {
       createdAt: new Date().toISOString(),
     };
 
-    setReviews((prev) => [newReview, ...prev]);
+    setReviews((prev) => {
+      const updated = [newReview, ...prev];
+      persistReviews(updated);
+      return updated;
+    });
     setCurrentView('feed');
   };
 
@@ -1851,6 +2364,8 @@ export default function App() {
         setView={setCurrentView}
         handleLogout={handleLogout}
         onUserClick={handleUserClick}
+        notifications={notifications}
+        onOpenNotification={handleOpenNotification}
       />
 
       <main>
@@ -1878,15 +2393,14 @@ export default function App() {
           </div>
         ) : (
           <>
-            {currentView === 'auth' && (
-              <AuthView error={authError} />
-            )}
+            {currentView === 'auth' && <AuthView error={authError} />}
 
             {currentView === 'feed' && (
               <FeedView
                 currentUser={currentUser}
                 reviews={reviews}
                 onUserClick={handleUserClick}
+                onRequireAuth={() => setCurrentView('auth')}
                 actions={{
                   onToggleLikeReview: handleLikeReview,
                   onToggleLikeComment: handleLikeComment,
@@ -1901,11 +2415,17 @@ export default function App() {
               <SearchView
                 currentUser={currentUser}
                 onAddReview={handleAddReview}
+                onRequireAuth={() => setCurrentView('auth')}
               />
             )}
 
-            {currentView === 'chat' && currentUser && (
-              <ChatView currentUser={currentUser} />
+            {currentView === 'messages' && currentUser && (
+              <DirectMessagesView
+                currentUser={currentUser}
+                contacts={availableContacts}
+                initialRecipient={selectedChatUser}
+                onNotificationsUpdated={setNotifications}
+              />
             )}
 
             {currentView === 'profile' && viewedUser && (
@@ -1921,6 +2441,9 @@ export default function App() {
           </>
         )}
       </main>
+
+      {/* Chatbot flutuante no canto inferior direito — apenas para usuários logados */}
+      {currentUser && <FloatingChatbot currentUser={currentUser} />}
     </div>
   );
 }
