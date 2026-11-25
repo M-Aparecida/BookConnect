@@ -17,6 +17,7 @@ import {
   Trash2,
   Check,
   CheckCheck,
+  AlertCircle,
 } from 'lucide-react';
 
 import {
@@ -132,6 +133,64 @@ const AvatarDisplay = ({
       }`}
     >
       {alt ? alt.charAt(0) : <User size={16} />}
+    </div>
+  );
+};
+
+// Componente para exibir resenhas longas com quebra de linha, "Mostrar mais" e rolagem
+const ReviewText = ({
+  text,
+  compact = false,
+}: {
+  text: string;
+  compact?: boolean;
+}) => {
+  const [expanded, setExpanded] = useState(false);
+  const maxChars = compact ? 180 : 240;
+  const lineCount = text.split('\n').length;
+  const isLong = text.length > maxChars || lineCount > 4;
+
+  if (!isLong) {
+    return (
+      <p
+        className={`text-gray-800 ${
+          compact ? 'text-sm mt-2' : 'text-sm md:text-base italic'
+        } whitespace-pre-wrap break-words [overflow-wrap:anywhere]`}
+      >
+        "{text}"
+      </p>
+    );
+  }
+
+  return (
+    <div className={compact ? 'mt-2' : ''}>
+      {expanded ? (
+        <div className="max-h-48 overflow-y-auto pr-2 rounded-md bg-white/70 border border-gray-200/80 p-2.5">
+          <p
+            className={`text-gray-800 ${
+              compact ? 'text-sm' : 'text-sm md:text-base italic'
+            } whitespace-pre-wrap break-words [overflow-wrap:anywhere]`}
+          >
+            "{text}"
+          </p>
+        </div>
+      ) : (
+        <p
+          className={`text-gray-800 ${
+            compact ? 'text-sm' : 'text-sm md:text-base italic'
+          } whitespace-pre-wrap break-words [overflow-wrap:anywhere]`}
+        >
+          "{text.slice(0, maxChars).trimEnd()}..."
+        </p>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setExpanded((prev) => !prev)}
+        className="mt-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:underline focus:outline-none"
+      >
+        {expanded ? 'Mostrar menos' : 'Mostrar mais'}
+      </button>
     </div>
   );
 };
@@ -378,6 +437,8 @@ const ProfileView = ({
   onEditReview,
   onDeleteReview,
   onBack,
+  onShowToast,
+  onRequestConfirm,
 }: {
   profileUser: any;
   currentUser: any;
@@ -387,6 +448,12 @@ const ProfileView = ({
   onEditReview: (reviewId: string, data: { rating: number; text: string }) => void;
   onDeleteReview: (reviewId: string) => void;
   onBack: () => void;
+  onShowToast: (text: string, type?: 'error' | 'success' | 'info') => void;
+  onRequestConfirm: (
+    title: string,
+    message: string,
+    onConfirm: () => void
+  ) => void;
 }) => {
   const isOwnProfile = currentUser && currentUser.id === profileUser.id;
 
@@ -421,11 +488,12 @@ const ProfileView = ({
 
   const saveEditedReview = (reviewId: string) => {
     if (editRating === 0 || !editText.trim()) {
-      alert('Preencha a nota e o texto da resenha!');
+      onShowToast('Preencha a nota e o texto da resenha!', 'error');
       return;
     }
     onEditReview(reviewId, { rating: editRating, text: editText.trim() });
     cancelEditingReview();
+    onShowToast('Resenha atualizada com sucesso!', 'success');
   };
 
   const handleSave = async () => {
@@ -475,12 +543,14 @@ const ProfileView = ({
 
       setNewImageBase64(null);
       setIsEditing(false);
+      onShowToast('Perfil atualizado com sucesso!', 'success');
     } catch (error) {
       console.error('Erro ao salvar perfil:', error);
-      alert(
+      onShowToast(
         error instanceof Error
           ? error.message
-          : 'Erro ao salvar dados no DynamoDB/S3.'
+          : 'Erro ao salvar dados no DynamoDB/S3.',
+        'error'
       );
     } finally {
       setIsSaving(false);
@@ -619,7 +689,7 @@ const ProfileView = ({
               {profileUser.email && (
                 <p className="text-sm text-gray-500">{profileUser.email}</p>
               )}
-              <p className="text-gray-600 mt-2 whitespace-pre-wrap">
+              <p className="text-gray-600 mt-2 whitespace-pre-wrap break-words">
                 {profileUser.bio || 'Nenhuma biografia informada.'}
               </p>
             </div>
@@ -670,15 +740,16 @@ const ProfileView = ({
                           <Edit3 size={16} />
                         </button>
                         <button
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                'Tem certeza que deseja excluir esta resenha?'
-                              )
-                            ) {
-                              onDeleteReview(review.id);
-                            }
-                          }}
+                          onClick={() =>
+                            onRequestConfirm(
+                              'Excluir resenha',
+                              'Tem certeza que deseja excluir esta resenha?',
+                              () => {
+                                onDeleteReview(review.id);
+                                onShowToast('Resenha excluída.', 'info');
+                              }
+                            )
+                          }
                           className="text-gray-400 hover:text-red-600 p-1 rounded transition-colors"
                           title="Excluir resenha"
                         >
@@ -719,9 +790,7 @@ const ProfileView = ({
                     </div>
                   ) : (
                     <>
-                      <p className="text-gray-700 mt-2 text-sm">
-                        "{review.text}"
-                      </p>
+                      <ReviewText text={review.text} compact />
                       <span className="text-xs text-gray-400 mt-2 block">
                         {new Date(review.createdAt).toLocaleDateString()}
                       </span>
@@ -744,12 +813,20 @@ const FeedView = ({
   actions,
   onUserClick,
   onRequireAuth,
+  onShowToast,
+  onRequestConfirm,
 }: {
   currentUser: any;
   reviews: any[];
   actions: any;
   onUserClick: (user: any) => void;
   onRequireAuth: () => void;
+  onShowToast: (text: string, type?: 'error' | 'success' | 'info') => void;
+  onRequestConfirm: (
+    title: string,
+    message: string,
+    onConfirm: () => void
+  ) => void;
 }) => {
   const [feedSearch, setFeedSearch] = useState('');
   const [activeCommentReview, setActiveCommentReview] = useState<string | null>(
@@ -781,7 +858,7 @@ const FeedView = ({
 
   const saveEditedReview = (reviewId: string) => {
     if (editRating === 0 || !editText.trim()) {
-      alert('Preencha a nota e o texto da resenha!');
+      onShowToast('Preencha a nota e o texto da resenha!', 'error');
       return;
     }
     actions.onEditReview(reviewId, {
@@ -789,6 +866,7 @@ const FeedView = ({
       text: editText.trim(),
     });
     cancelEditingReview();
+    onShowToast('Resenha atualizada com sucesso!', 'success');
   };
 
   const normalizedQuery = normalizeText(feedSearch.trim());
@@ -965,15 +1043,16 @@ const FeedView = ({
                             <Edit3 size={16} />
                           </button>
                           <button
-                            onClick={() => {
-                              if (
-                                window.confirm(
-                                  'Tem certeza que deseja excluir esta resenha?'
-                                )
-                              ) {
-                                actions.onDeleteReview(review.id);
-                              }
-                            }}
+                            onClick={() =>
+                              onRequestConfirm(
+                                'Excluir resenha',
+                                'Tem certeza que deseja excluir esta resenha?',
+                                () => {
+                                  actions.onDeleteReview(review.id);
+                                  onShowToast('Resenha excluída.', 'info');
+                                }
+                              )
+                            }
                             className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
                             title="Excluir resenha"
                           >
@@ -1034,9 +1113,7 @@ const FeedView = ({
                           </div>
                         </div>
                       ) : (
-                        <p className="text-gray-800 text-sm md:text-base italic">
-                          "{review.text}"
-                        </p>
+                        <ReviewText text={review.text} />
                       )}
                     </div>
                   </div>
@@ -1114,8 +1191,8 @@ const FeedView = ({
                                 onClick={() => onUserClick(comment.user)}
                               />
 
-                              <div className="flex-1">
-                                <div className="bg-white p-2.5 rounded-lg border border-gray-200 shadow-sm inline-block min-w-full sm:min-w-[60%]">
+                              <div className="flex-1 min-w-0">
+                                <div className="bg-white p-2.5 rounded-lg border border-gray-200 shadow-sm inline-block min-w-full sm:min-w-[60%] max-w-full">
                                   <span
                                     className="font-semibold text-gray-900 cursor-pointer hover:underline"
                                     onClick={() => onUserClick(comment.user)}
@@ -1123,7 +1200,7 @@ const FeedView = ({
                                     {comment.user.name}
                                   </span>
 
-                                  <p className="text-gray-800 mt-0.5">
+                                  <p className="text-gray-800 mt-0.5 break-words [overflow-wrap:anywhere]">
                                     {comment.text}
                                   </p>
                                 </div>
@@ -1209,8 +1286,8 @@ const FeedView = ({
                                             }
                                           />
 
-                                          <div>
-                                            <div className="bg-gray-100 p-2 rounded-lg border border-gray-200 inline-block">
+                                          <div className="min-w-0">
+                                            <div className="bg-gray-100 p-2 rounded-lg border border-gray-200 inline-block max-w-full">
                                               <span
                                                 className="font-semibold text-gray-900 text-xs cursor-pointer hover:underline"
                                                 onClick={() =>
@@ -1220,7 +1297,7 @@ const FeedView = ({
                                                 {reply.user.name}
                                               </span>
 
-                                              <p className="text-gray-800 mt-0.5">
+                                              <p className="text-gray-800 mt-0.5 break-words [overflow-wrap:anywhere]">
                                                 {reply.text}
                                               </p>
                                             </div>
@@ -1358,10 +1435,12 @@ const SearchView = ({
   currentUser,
   onAddReview,
   onRequireAuth,
+  onShowToast,
 }: {
   currentUser: any;
   onAddReview: (review: any) => void;
   onRequireAuth: () => void;
+  onShowToast: (text: string, type?: 'error' | 'success' | 'info') => void;
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [results, setResults] = useState<any[]>([]);
@@ -1402,6 +1481,7 @@ const SearchView = ({
       setResults(formattedResults);
     } catch (error) {
       console.error('Erro na busca', error);
+      onShowToast('Erro ao consultar o acervo de livros.', 'error');
     } finally {
       setIsSearching(false);
     }
@@ -1410,7 +1490,7 @@ const SearchView = ({
   const submitReview = () => {
     if (!currentUser) return;
     if (rating === 0 || !reviewText.trim()) {
-      alert('Preencha a nota e o texto!');
+      onShowToast('Preencha a nota e o texto da resenha!', 'error');
       return;
     }
 
@@ -1423,6 +1503,7 @@ const SearchView = ({
     setSelectedBook(null);
     setRating(0);
     setReviewText('');
+    onShowToast('Resenha publicada com sucesso!', 'success');
   };
 
   return (
@@ -1578,30 +1659,42 @@ const DirectMessagesView = ({
   currentUser,
   contacts,
   initialRecipient,
+  notifications,
   onNotificationsUpdated,
   onMarkContactRead,
+  onShowToast,
 }: {
   currentUser: any;
   contacts: any[];
   initialRecipient: any;
+  notifications: any[];
   onNotificationsUpdated: (notifs: any[]) => void;
   onMarkContactRead: (contactId: string) => void;
+  onShowToast: (text: string, type?: 'error' | 'success' | 'info') => void;
 }) => {
   const [selectedContact, setSelectedContact] = useState<any>(
-    initialRecipient || contacts[0] || null
+    initialRecipient || null
   );
   const [messages, setMessages] = useState<any[]>([]);
   const [inputMsg, setInputMsg] = useState('');
   const [isLoadingMsgs, setIsLoadingMsgs] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (initialRecipient) {
       setSelectedContact(initialRecipient);
     } else if (!selectedContact && contacts.length > 0) {
-      setSelectedContact(contacts[0]);
+      const hasUnread = notifications.some((n) => !n.read);
+      if (!hasUnread) {
+        setSelectedContact(contacts[0]);
+      }
     }
   }, [initialRecipient, contacts]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const fetchConversation = async (contactId: string, showLoader = false) => {
     if (!currentUser || !contactId) return;
@@ -1678,10 +1771,15 @@ const DirectMessagesView = ({
         if (data.message) {
           setMessages((prev) => [...prev, data.message]);
         }
+      } else {
+        onShowToast('Não foi possível enviar a mensagem.', 'error');
       }
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error);
-      alert('Não foi possível enviar a mensagem. Tente novamente.');
+      onShowToast(
+        'Não foi possível enviar a mensagem. Tente novamente.',
+        'error'
+      );
     } finally {
       setIsSending(false);
     }
@@ -1699,8 +1797,13 @@ const DirectMessagesView = ({
       <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex min-h-[420px]">
         {/* Lista de Perfis */}
         <div className="w-1/3 sm:w-72 border-r border-gray-200 bg-gray-50 flex flex-col">
-          <div className="p-3 border-b border-gray-200 font-semibold text-sm text-gray-700">
-            Perfis da Comunidade
+          <div className="p-3 border-b border-gray-200 font-semibold text-sm text-gray-700 flex items-center justify-between">
+            <span>Perfis da Comunidade</span>
+            {notifications.filter((n) => !n.read).length > 0 && (
+              <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                {notifications.filter((n) => !n.read).length} nova(s)
+              </span>
+            )}
           </div>
           <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
             {contacts.length === 0 ? (
@@ -1710,28 +1813,66 @@ const DirectMessagesView = ({
             ) : (
               contacts.map((contact) => {
                 const isSelected = selectedContact?.id === contact.id;
+                const unreadFromContact = notifications.filter(
+                  (n) => !n.read && n.fromId === contact.id
+                );
+                const unreadCount = unreadFromContact.length;
+                const lastUnread =
+                  unreadCount > 0
+                    ? unreadFromContact[unreadFromContact.length - 1]
+                    : null;
+
                 return (
                   <button
                     key={contact.id}
-                    onClick={() => setSelectedContact(contact)}
+                    onClick={() => {
+                      setSelectedContact(contact);
+                      onMarkContactRead(contact.id);
+                    }}
                     className={`w-full p-3 flex items-center gap-3 text-left transition-colors ${
                       isSelected
                         ? 'bg-indigo-50 border-r-4 border-indigo-600'
+                        : unreadCount > 0
+                        ? 'bg-indigo-50/40 hover:bg-indigo-50/70'
                         : 'hover:bg-gray-100'
                     }`}
                   >
-                    <AvatarDisplay
-                      src={contact.avatar}
-                      alt={contact.name}
-                      className="w-10 h-10 rounded-full text-sm"
-                    />
+                    <div className="relative shrink-0">
+                      <AvatarDisplay
+                        src={contact.avatar}
+                        alt={contact.name}
+                        className="w-10 h-10 rounded-full text-sm"
+                      />
+                      {unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 border-2 border-white" />
+                      )}
+                    </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-sm text-gray-900 truncate">
-                        {contact.name}
-                      </p>
-                      <p className="text-xs text-gray-500 truncate">
-                        {contact.bio || 'Leitor do BookConnect'}
-                      </p>
+                      <div className="flex items-center justify-between gap-1">
+                        <p
+                          className={`text-sm truncate ${
+                            unreadCount > 0
+                              ? 'font-bold text-gray-900'
+                              : 'font-semibold text-gray-900'
+                          }`}
+                        >
+                          {contact.name}
+                        </p>
+                        {unreadCount > 0 && (
+                          <span className="bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </div>
+                      {lastUnread ? (
+                        <p className="text-xs font-medium text-indigo-700 truncate">
+                          Nova mensagem: "{lastUnread.text}"
+                        </p>
+                      ) : (
+                        <p className="text-xs text-gray-500 truncate">
+                          {contact.bio || 'Leitor do BookConnect'}
+                        </p>
+                      )}
                     </div>
                   </button>
                 );
@@ -1795,7 +1936,7 @@ const DirectMessagesView = ({
                               : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
                           }`}
                         >
-                          <p className="text-sm whitespace-pre-wrap break-words">
+                          <p className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                             {msg.text}
                           </p>
                           <span
@@ -1815,6 +1956,7 @@ const DirectMessagesView = ({
                     );
                   })
                 )}
+                <div ref={chatEndRef} />
               </div>
 
               <div className="p-3 bg-white border-t border-gray-200">
@@ -1841,8 +1983,9 @@ const DirectMessagesView = ({
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
-              Selecione um perfil à esquerda para conversar.
+            <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-sm p-6 text-center">
+              <MessageCircle size={36} className="mb-2 opacity-40" />
+              <p>Selecione um perfil à esquerda para visualizar a conversa.</p>
             </div>
           )}
         </div>
@@ -2388,6 +2531,40 @@ export default function App() {
   const [authError, setAuthError] = useState('');
 
   const [viewedUser, setViewedUser] = useState<any>(null);
+
+  // Toast e Modal de Confirmação na própria tela (substituem alert e window.confirm do navegador)
+  const [toast, setToast] = useState<{
+    text: string;
+    type: 'error' | 'success' | 'info';
+  } | null>(null);
+  const toastTimeoutRef = useRef<number | null>(null);
+
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  const showToast = (
+    text: string,
+    type: 'error' | 'success' | 'info' = 'info'
+  ) => {
+    setToast({ text, type });
+    if (toastTimeoutRef.current) {
+      window.clearTimeout(toastTimeoutRef.current);
+    }
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setToast(null);
+    }, 4000);
+  };
+
+  const requestConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void
+  ) => {
+    setConfirmModal({ title, message, onConfirm });
+  };
 
   // --- CONTROLE DE NOTIFICAÇÕES LIDAS (PERSISTIDO NO LOCALSTORAGE POR USUÁRIO) ---
   const getReadNotifIds = (userId: string): string[] => {
@@ -2981,6 +3158,66 @@ export default function App() {
         onMarkAllAsRead={handleMarkAllNotificationsAsRead}
       />
 
+      {/* Aviso Toast na própria tela (substitui alert do navegador) */}
+      {toast && (
+        <div className="fixed top-20 right-4 z-[70] max-w-sm w-full fade-in">
+          <div
+            className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium ${
+              toast.type === 'error'
+                ? 'bg-red-50 border-red-200 text-red-800'
+                : toast.type === 'success'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                : 'bg-indigo-50 border-indigo-200 text-indigo-800'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <AlertCircle size={18} className="shrink-0" />
+              <span>{toast.text}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setToast(null)}
+              className="opacity-60 hover:opacity-100"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação na própria tela (substitui window.confirm do navegador) */}
+      {confirmModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[80] fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-gray-200">
+            <h3 className="text-lg font-bold text-gray-900">
+              {confirmModal.title}
+            </h3>
+            <p className="text-sm text-gray-600 mt-2">
+              {confirmModal.message}
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  confirmModal.onConfirm();
+                  setConfirmModal(null);
+                }}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-colors"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main>
         <style>{`
           .fade-in {
@@ -3014,6 +3251,8 @@ export default function App() {
                 reviews={reviews}
                 onUserClick={handleUserClick}
                 onRequireAuth={() => setCurrentView('auth')}
+                onShowToast={showToast}
+                onRequestConfirm={requestConfirm}
                 actions={{
                   onEditReview: handleEditReview,
                   onDeleteReview: handleDeleteReview,
@@ -3033,6 +3272,7 @@ export default function App() {
                 currentUser={currentUser}
                 onAddReview={handleAddReview}
                 onRequireAuth={() => setCurrentView('auth')}
+                onShowToast={showToast}
               />
             )}
 
@@ -3041,8 +3281,10 @@ export default function App() {
                 currentUser={currentUser}
                 contacts={availableContacts}
                 initialRecipient={selectedChatUser}
+                notifications={notifications}
                 onNotificationsUpdated={handleNotificationsUpdated}
                 onMarkContactRead={handleMarkContactNotificationsAsRead}
+                onShowToast={showToast}
               />
             )}
 
@@ -3056,6 +3298,8 @@ export default function App() {
                 onEditReview={handleEditReview}
                 onDeleteReview={handleDeleteReview}
                 onBack={() => setCurrentView('feed')}
+                onShowToast={showToast}
+                onRequestConfirm={requestConfirm}
               />
             )}
           </>
