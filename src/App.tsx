@@ -51,7 +51,7 @@ const GUEST_FAQ = [
   {
     question: 'Como avaliar um livro?',
     answer:
-      'Acesse a aba "Buscar Livros", pesquise pelo título ou autor desejado e clique em "+ Fazer Resenha". Para publicar sua nota e opinião, basta estar conectado à sua conta.',
+      'Acesse a aba "Acervo", pesquise pelo título ou autor desejado e clique em "+ Escrever Resenha". Para publicar sua nota e opinião, basta estar conectado à sua conta.',
   },
   {
     question: 'Como pesquisar resenhas de um livro?',
@@ -76,7 +76,7 @@ const QUICK_SEARCH_SUGGESTIONS = [
   'O Pequeno Príncipe',
   'Harry Potter',
   'Clarice Lispector',
-  'Machado de Assis',
+  'É Assim que Acaba',
 ];
 
 // Utilitário para ignorar acentos e maiúsculas na busca
@@ -227,6 +227,7 @@ const Header = ({
   handleLogout,
   onUserClick,
   notifications,
+  unreadMessagesCount,
   onOpenNotification,
   onMarkAsRead,
   onMarkAllAsRead,
@@ -237,12 +238,16 @@ const Header = ({
   handleLogout: () => void;
   onUserClick: (user: any) => void;
   notifications: any[];
+  unreadMessagesCount: number;
   onOpenNotification: (notif: any) => void;
   onMarkAsRead: (notifId: string) => void;
   onMarkAllAsRead: () => void;
 }) => {
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
-  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  // Exibe apenas notificações ainda não lidas (somem ao serem lidas/abertas)
+  const visibleNotifications = notifications.filter((n) => !n.read);
+  const unreadCount = visibleNotifications.length;
 
   const NavButton = ({
     view,
@@ -282,6 +287,47 @@ const Header = ({
     );
   };
 
+  const renderNotifActionText = (notif: any) => {
+    if (notif.type === 'like_review') {
+      return (
+        <>
+          <span className="font-semibold">{notif.fromName}</span> curtiu sua
+          resenha{notif.bookTitle ? ` de "${notif.bookTitle}"` : ''}.
+        </>
+      );
+    }
+    if (notif.type === 'like_comment') {
+      return (
+        <>
+          <span className="font-semibold">{notif.fromName}</span> curtiu seu
+          comentário{notif.bookTitle ? ` em "${notif.bookTitle}"` : ''}.
+        </>
+      );
+    }
+    if (notif.type === 'comment') {
+      return (
+        <>
+          <span className="font-semibold">{notif.fromName}</span> comentou na
+          sua resenha{notif.bookTitle ? ` de "${notif.bookTitle}"` : ''}:
+        </>
+      );
+    }
+    if (notif.type === 'reply') {
+      return (
+        <>
+          <span className="font-semibold">{notif.fromName}</span> respondeu ao
+          seu comentário{notif.bookTitle ? ` em "${notif.bookTitle}"` : ''}:
+        </>
+      );
+    }
+    return (
+      <>
+        <span className="font-semibold">{notif.fromName}</span> enviou uma
+        mensagem:
+      </>
+    );
+  };
+
   return (
     <header className="bg-[#FBF9F5]/90 backdrop-blur-md border-b border-[#E7E2D8] sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
@@ -313,7 +359,7 @@ const Header = ({
                 view="messages"
                 icon={MessageCircle}
                 label="Mensagens"
-                badge={unreadCount}
+                badge={unreadMessagesCount}
               />
             )}
           </nav>
@@ -365,61 +411,72 @@ const Header = ({
                       </div>
 
                       <div className="max-h-72 overflow-y-auto divide-y divide-[#F4F0E8]">
-                        {notifications.length === 0 ? (
+                        {visibleNotifications.length === 0 ? (
                           <div className="p-6 text-center text-sm text-[#8C8275]">
-                            Nenhuma notificação no momento.
+                            Nenhuma notificação nova no momento.
                           </div>
                         ) : (
-                          notifications.map((notif) => (
+                          visibleNotifications.map((notif) => (
                             <div
                               key={notif.id}
                               onClick={() => {
                                 setShowNotifDropdown(false);
                                 onOpenNotification(notif);
                               }}
-                              className={`w-full text-left px-4 py-3 hover:bg-[#FBF9F5] transition-colors flex items-start gap-3 cursor-pointer ${
-                                !notif.read ? 'bg-[#F3F6F3]' : ''
-                              }`}
+                              className="w-full text-left px-4 py-3 bg-[#F3F6F3] hover:bg-[#E9EFEA] transition-colors flex items-start gap-3 cursor-pointer"
                             >
-                              <AvatarDisplay
-                                alt={notif.fromName}
-                                className="w-8 h-8 rounded-full text-xs mt-0.5"
-                              />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs text-[#1F1C18]">
-                                  <span className="font-semibold">
-                                    {notif.fromName}
-                                  </span>{' '}
-                                  enviou uma mensagem:
-                                </p>
-                                <p className="text-xs text-[#5C554C] truncate mt-0.5">
-                                  “{notif.text}”
-                                </p>
-                                <span className="text-[10px] text-[#8C8275] mt-1 block">
-                                  {notif.createdAt
-                                    ? new Date(
-                                        notif.createdAt
-                                      ).toLocaleTimeString([], {
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                      })
-                                    : ''}
-                                </span>
+                              <div className="relative shrink-0 mt-0.5">
+                                <AvatarDisplay
+                                  src={notif.fromAvatar}
+                                  alt={notif.fromName}
+                                  className="w-8 h-8 rounded-full text-xs"
+                                />
+                                {(notif.type === 'like_review' ||
+                                  notif.type === 'like_comment') && (
+                                  <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#A63D2D] text-white flex items-center justify-center ring-2 ring-white">
+                                    <Heart size={9} fill="currentColor" />
+                                  </span>
+                                )}
+                                {(notif.type === 'comment' ||
+                                  notif.type === 'reply') && (
+                                  <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#1E3A2F] text-white flex items-center justify-center ring-2 ring-white">
+                                    <MessageCircle size={9} />
+                                  </span>
+                                )}
                               </div>
 
-                              {!notif.read && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onMarkAsRead(notif.id);
-                                  }}
-                                  className="p-1.5 text-[#1E3A2F] hover:bg-[#E1EAE4] rounded-full shrink-0 mt-0.5 transition-colors"
-                                  title="Marcar como lida"
-                                >
-                                  <Check size={14} />
-                                </button>
-                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs text-[#1F1C18] leading-snug">
+                                  {renderNotifActionText(notif)}
+                                </p>
+                                {notif.text && (
+                                  <p className="text-xs text-[#5C554C] truncate mt-0.5">
+                                    “{notif.text}”
+                                  </p>
+                                )}
+                                {notif.createdAt && (
+                                  <span className="text-[10px] text-[#8C8275] mt-1 block">
+                                    {new Date(
+                                      notif.createdAt
+                                    ).toLocaleTimeString([], {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onMarkAsRead(notif.id);
+                                }}
+                                className="p-1.5 text-[#1E3A2F] hover:bg-[#DCE7DF] rounded-full shrink-0 mt-0.5 transition-colors"
+                                title="Marcar como lida"
+                              >
+                                <Check size={14} />
+                              </button>
                             </div>
                           ))
                         )}
@@ -1029,19 +1086,23 @@ const ProfileView = ({
   );
 };
 
-// 3. FEED EDITORIAL (LAYOUT EM 2 COLUNAS NO DESKTOP + BUSCA + RESENHAS + COMENTÁRIOS)
+// 3. FEED EDITORIAL (LAYOUT EM 2 COLUNAS NO DESKTOP + BUSCA + RESENHAS + COMENTÁRIOS + MODAL DE CURTIDAS)
 const FeedView = ({
   currentUser,
   reviews,
+  knownUsersMap,
   actions,
   onUserClick,
   onRequireAuth,
   onShowToast,
   onRequestConfirm,
   onGoToSearch,
+  highlightedReviewId,
+  onClearHighlightedReview,
 }: {
   currentUser: any;
   reviews: any[];
+  knownUsersMap: Map<string, any>;
   actions: any;
   onUserClick: (user: any) => void;
   onRequireAuth: () => void;
@@ -1052,6 +1113,8 @@ const FeedView = ({
     onConfirm: () => void
   ) => void;
   onGoToSearch: () => void;
+  highlightedReviewId: string | null;
+  onClearHighlightedReview: () => void;
 }) => {
   const [feedSearch, setFeedSearch] = useState('');
   const [activeCommentReview, setActiveCommentReview] = useState<string | null>(
@@ -1064,10 +1127,30 @@ const FeedView = ({
   } | null>(null);
   const [replyText, setReplyText] = useState('');
 
+  // Modal para visualizar quem curtiu uma resenha
+  const [likesModalReview, setLikesModalReview] = useState<any | null>(null);
+
   // Estado para edição de resenha no feed
   const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
   const [editRating, setEditRating] = useState(0);
   const [editText, setEditText] = useState('');
+
+  // Quando o usuário clica numa notificação de comentário/curtida, abre os comentários e rola até a resenha
+  useEffect(() => {
+    if (!highlightedReviewId) return;
+    setActiveCommentReview(highlightedReviewId);
+
+    const el = document.getElementById(`review-${highlightedReviewId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    const timer = window.setTimeout(() => {
+      onClearHighlightedReview();
+    }, 3500);
+
+    return () => window.clearTimeout(timer);
+  }, [highlightedReviewId]);
 
   const startEditingReview = (review: any) => {
     setEditingReviewId(review.id);
@@ -1123,6 +1206,24 @@ const FeedView = ({
     actions.onAddReply(reviewId, commentId, replyText);
     setReplyText('');
     setReplyingTo(null);
+  };
+
+  // Resolve os dados completos de quem curtiu (a partir de likedUsers ou do mapa de usuários conhecidos)
+  const getLikersList = (review: any) => {
+    const likedIds: string[] = review.likedBy || [];
+    const savedDetails: Record<string, any> = review.likedUsers || {};
+
+    return likedIds.map((uid) => {
+      if (currentUser && uid === currentUser.id) return currentUser;
+      if (savedDetails[uid]) return savedDetails[uid];
+      if (knownUsersMap.has(uid)) return knownUsersMap.get(uid);
+      return {
+        id: uid,
+        name: 'Leitor do BookConnect',
+        avatar: '',
+        bio: '',
+      };
+    });
   };
 
   return (
@@ -1250,11 +1351,17 @@ const FeedView = ({
                 const isOwnReview =
                   currentUser && review.user.id === currentUser.id;
                 const isEditingThis = editingReviewId === review.id;
+                const isHighlighted = highlightedReviewId === review.id;
 
                 return (
                   <article
+                    id={`review-${review.id}`}
                     key={review.id}
-                    className="bg-white rounded-3xl shadow-sm border border-[#E7E2D8] overflow-hidden hover:border-[#D8D0C2] transition-all fade-in"
+                    className={`bg-white rounded-3xl shadow-sm border overflow-hidden transition-all fade-in ${
+                      isHighlighted
+                        ? 'border-[#1E3A2F] ring-2 ring-[#1E3A2F]/25'
+                        : 'border-[#E7E2D8] hover:border-[#D8D0C2]'
+                    }`}
                   >
                     <div className="p-5 sm:p-7">
                       {/* Cabeçalho do Card */}
@@ -1382,33 +1489,60 @@ const FeedView = ({
                       {/* Barra de Interações */}
                       <div className="flex items-center justify-between pt-3 border-t border-[#F4F0E8]">
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              if (!currentUser) {
-                                onRequireAuth();
-                                return;
-                              }
-                              actions.onToggleLikeReview(review.id);
-                            }}
-                            title={
-                              !currentUser
-                                ? 'Faça login para curtir'
-                                : hasLikedReview
-                                ? 'Remover curtida'
-                                : 'Curtir resenha'
-                            }
-                            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium transition-all cursor-pointer ${
+                          {/* Pill de Curtida: Coração curte/descurte, Número abre quem curtiu */}
+                          <div
+                            className={`inline-flex items-center rounded-full text-sm font-medium transition-all ${
                               hasLikedReview
                                 ? 'bg-[#FDF2F0] text-[#A63D2D]'
-                                : 'text-[#5C554C] hover:bg-[#F4F0E8] hover:text-[#A63D2D]'
+                                : 'text-[#5C554C] hover:bg-[#F4F0E8]'
                             }`}
                           >
-                            <Heart
-                              size={17}
-                              fill={hasLikedReview ? 'currentColor' : 'none'}
-                            />
-                            <span>{review.likedBy.length}</span>
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!currentUser) {
+                                  onRequireAuth();
+                                  return;
+                                }
+                                actions.onToggleLikeReview(review.id);
+                              }}
+                              title={
+                                !currentUser
+                                  ? 'Faça login para curtir'
+                                  : hasLikedReview
+                                  ? 'Remover curtida'
+                                  : 'Curtir resenha'
+                              }
+                              className="pl-3.5 pr-1.5 py-1.5 flex items-center hover:text-[#A63D2D] transition-colors cursor-pointer"
+                            >
+                              <Heart
+                                size={17}
+                                fill={hasLikedReview ? 'currentColor' : 'none'}
+                              />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (review.likedBy.length > 0) {
+                                  setLikesModalReview(review);
+                                } else {
+                                  onShowToast(
+                                    'Esta resenha ainda não recebeu curtidas.',
+                                    'info'
+                                  );
+                                }
+                              }}
+                              title={
+                                review.likedBy.length > 0
+                                  ? 'Ver quem curtiu'
+                                  : 'Nenhuma curtida ainda'
+                              }
+                              className="pr-3.5 pl-1 py-1.5 hover:underline cursor-pointer"
+                            >
+                              {review.likedBy.length}
+                            </button>
+                          </div>
 
                           <button
                             onClick={() =>
@@ -1796,11 +1930,78 @@ const FeedView = ({
           </div>
         </aside>
       </div>
+
+      {/* Modal: Lista de Leitores que Curtiram a Resenha */}
+      {likesModalReview && (
+        <div
+          className="fixed inset-0 bg-[#1F1C18]/60 backdrop-blur-xs flex items-center justify-center p-4 z-[80] fade-in"
+          onClick={() => setLikesModalReview(null)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-[#E7E2D8]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-[#EFECE4] bg-[#FBF9F5] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Heart
+                  size={17}
+                  className="text-[#A63D2D]"
+                  fill="currentColor"
+                />
+                <h3 className="font-serif-display font-bold text-xl text-[#1F1C18]">
+                  Curtidas ({likesModalReview.likedBy.length})
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setLikesModalReview(null)}
+                className="text-[#8C8275] hover:text-[#1F1C18] p-1 rounded-full hover:bg-[#EFECE4]"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="max-h-80 overflow-y-auto divide-y divide-[#F4F0E8]">
+              {getLikersList(likesModalReview).map((liker: any) => (
+                <button
+                  key={liker.id}
+                  type="button"
+                  onClick={() => {
+                    setLikesModalReview(null);
+                    onUserClick(liker);
+                  }}
+                  className="w-full px-6 py-3.5 flex items-center gap-3.5 hover:bg-[#FBF9F5] transition-colors text-left"
+                >
+                  <AvatarDisplay
+                    src={liker.avatar}
+                    alt={liker.name}
+                    className="w-10 h-10 rounded-full border border-[#E7E2D8]"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-sm text-[#1F1C18] truncate">
+                      {liker.name}
+                    </p>
+                    {liker.bio && (
+                      <p className="text-xs text-[#8C8275] truncate mt-0.5">
+                        {liker.bio}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-xs font-medium text-[#1E3A2F] shrink-0">
+                    Ver perfil
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-// 4. BUSCA E API OPEN LIBRARY
+// 4. BUSCA E API APPLE BOOKS (EM PORTUGUÊS + CAPAS MODERNAS HD + FALLBACK OPEN LIBRARY)
 const SearchView = ({
   currentUser,
   onAddReview,
@@ -1826,15 +2027,53 @@ const SearchView = ({
     setIsSearching(true);
 
     try {
-      const res = await fetch(
-        `https://openlibrary.org/search.json?q=${encodeURIComponent(
+      // 1. Busca principal na Apple Books / iTunes API (Brasil, títulos em PT-BR e capas modernas HD)
+      const appleRes = await fetch(
+        `https://itunes.apple.com/search?term=${encodeURIComponent(
           query
-        )}&limit=12`
+        )}&media=ebook&country=br&lang=pt_br&limit=15`
       );
 
-      const data = await res.json();
+      if (appleRes.ok) {
+        const appleData = await appleRes.json();
+        const items = appleData.results || [];
 
-      const formattedResults = data.docs.map((book: any) => ({
+        if (items.length > 0) {
+          const formattedApple = items.slice(0, 12).map((item: any) => {
+            const title = item.trackName || 'Título desconhecido';
+            const highResCover = item.artworkUrl100
+              ? item.artworkUrl100.replace('100x100bb', '600x600bb')
+              : `https://placehold.co/300x450/F4F0E8/1E3A2F?text=${encodeURIComponent(
+                  title.slice(0, 28)
+                )}`;
+
+            return {
+              id: String(item.trackId || Math.random()),
+              title,
+              author: item.artistName || 'Autor Desconhecido',
+              isbn: 'N/A',
+              cover: highResCover,
+            };
+          });
+
+          setResults(formattedApple);
+          return;
+        }
+      }
+
+      // 2. Fallback caso não encontre no catálogo Apple: Open Library filtrada para português
+      const olRes = await fetch(
+        `https://openlibrary.org/search.json?q=${encodeURIComponent(
+          query
+        )}&language=por&limit=12`
+      );
+
+      if (!olRes.ok) {
+        throw new Error('Falha ao consultar acervos de livros');
+      }
+
+      const olData = await olRes.json();
+      const formattedOl = (olData.docs || []).map((book: any) => ({
         id: book.key,
         title: book.title,
         author: book.author_name
@@ -1842,13 +2081,15 @@ const SearchView = ({
           : 'Autor Desconhecido',
         isbn: book.isbn ? book.isbn[0] : 'N/A',
         cover: book.cover_i
-          ? `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`
-          : 'https://via.placeholder.com/150x220?text=Sem+Capa',
+          ? `https://covers.openlibrary.org/b/id/${book.cover_i}-L.jpg`
+          : `https://placehold.co/300x450/F4F0E8/1E3A2F?text=${encodeURIComponent(
+              (book.title || 'Sem Capa').slice(0, 28)
+            )}`,
       }));
 
-      setResults(formattedResults);
+      setResults(formattedOl);
     } catch (error) {
-      console.error('Erro na busca', error);
+      console.error('Erro na busca:', error);
       onShowToast('Erro ao consultar o acervo de livros.', 'error');
     } finally {
       setIsSearching(false);
@@ -1884,14 +2125,14 @@ const SearchView = ({
       {/* Banner Editorial de Busca */}
       <div className="bg-white rounded-3xl border border-[#E7E2D8] p-6 sm:p-10 shadow-sm mb-8 text-center">
         <span className="inline-block text-[11px] uppercase tracking-[0.2em] text-[#9A6220] font-semibold mb-2">
-          Biblioteca Mundial • Open Library
+          Acervo em Português • Apple Books
         </span>
         <h2 className="font-serif-display text-3xl sm:text-4xl font-bold text-[#1F1C18]">
           Explorar Acervo Literário
         </h2>
         <p className="text-sm text-[#6E665C] mt-2 max-w-lg mx-auto">
-          Encontre obras clássicas e contemporâneas para registrar suas notas e
-          impressões no BookConnect.
+          Encontre obras clássicas e contemporâneas em português para registrar
+          suas notas e impressões no BookConnect.
         </p>
 
         <form
@@ -1906,7 +2147,7 @@ const SearchView = ({
             <input
               type="text"
               className="block w-full pl-11 pr-4 py-3.5 border border-[#DCD5C9] rounded-2xl bg-[#FBF9F5] text-sm text-[#1F1C18] placeholder-[#9A9083] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A2F]/15 focus:border-[#1E3A2F] transition-all"
-              placeholder="Busque por título, autor... (Ex: Harry Potter)"
+              placeholder="Busque por título, autor... (Ex: Dom Casmurro, É Assim que Acaba)"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -1943,7 +2184,7 @@ const SearchView = ({
         <div className="text-center py-16 text-[#6E665C]">
           <BookOpen className="h-9 w-9 mx-auto mb-3 text-[#1E3A2F] animate-pulse" />
           <p className="font-serif-display text-xl font-semibold text-[#1F1C18]">
-            Consultando a biblioteca mundial...
+            Consultando acervo literário...
           </p>
         </div>
       ) : results.length > 0 ? (
@@ -1957,6 +2198,12 @@ const SearchView = ({
                 <img
                   src={book.cover}
                   alt={book.title}
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src =
+                      `https://placehold.co/300x450/F4F0E8/1E3A2F?text=${encodeURIComponent(
+                        book.title.slice(0, 28)
+                      )}`;
+                  }}
                   className="h-full object-contain rounded-md shadow-[4px_8px_18px_rgba(31,28,24,0.18)]"
                 />
               </div>
@@ -2065,8 +2312,8 @@ const DirectMessagesView = ({
   currentUser,
   contacts,
   initialRecipient,
-  notifications,
-  onNotificationsUpdated,
+  messageNotifications,
+  onMessageNotificationsUpdated,
   onMarkContactRead,
   onShowToast,
   onUserClick,
@@ -2074,8 +2321,8 @@ const DirectMessagesView = ({
   currentUser: any;
   contacts: any[];
   initialRecipient: any;
-  notifications: any[];
-  onNotificationsUpdated: (notifs: any[]) => void;
+  messageNotifications: any[];
+  onMessageNotificationsUpdated: (notifs: any[]) => void;
   onMarkContactRead: (contactId: string) => void;
   onShowToast: (text: string, type?: 'error' | 'success' | 'info') => void;
   onUserClick: (user: any) => void;
@@ -2097,7 +2344,7 @@ const DirectMessagesView = ({
       setSelectedContact(initialRecipient);
       setMobileShowChat(true);
     } else if (!selectedContact && contacts.length > 0) {
-      const hasUnread = notifications.some((n) => !n.read);
+      const hasUnread = messageNotifications.some((n) => !n.read);
       if (!hasUnread) {
         setSelectedContact(contacts[0]);
       }
@@ -2129,7 +2376,7 @@ const DirectMessagesView = ({
         const data = await res.json();
         setMessages(data.messages || []);
         if (data.notifications) {
-          onNotificationsUpdated(data.notifications);
+          onMessageNotificationsUpdated(data.notifications);
         }
         onMarkContactRead(contactId);
       }
@@ -2221,9 +2468,9 @@ const DirectMessagesView = ({
             <span className="text-xs font-semibold uppercase tracking-wider text-[#6E665C]">
               Leitores da Comunidade
             </span>
-            {notifications.filter((n) => !n.read).length > 0 && (
+            {messageNotifications.filter((n) => !n.read).length > 0 && (
               <span className="bg-[#A63D2D] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                {notifications.filter((n) => !n.read).length} nova(s)
+                {messageNotifications.filter((n) => !n.read).length} nova(s)
               </span>
             )}
           </div>
@@ -2236,7 +2483,7 @@ const DirectMessagesView = ({
             ) : (
               contacts.map((contact) => {
                 const isSelected = selectedContact?.id === contact.id;
-                const unreadFromContact = notifications.filter(
+                const unreadFromContact = messageNotifications.filter(
                   (n) => !n.read && n.fromId === contact.id
                 );
                 const unreadCount = unreadFromContact.length;
@@ -3018,8 +3265,12 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentView, setCurrentView] = useState('feed');
   const [reviews, setReviews] = useState<any[]>([]);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [messageNotifications, setMessageNotifications] = useState<any[]>([]);
+  const [activityNotifications, setActivityNotifications] = useState<any[]>([]);
   const [selectedChatUser, setSelectedChatUser] = useState<any>(null);
+  const [highlightedReviewId, setHighlightedReviewId] = useState<string | null>(
+    null
+  );
 
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState('');
@@ -3084,8 +3335,12 @@ export default function App() {
     return rawNotifs.map((n) => (readIds.has(n.id) ? { ...n, read: true } : n));
   };
 
-  const handleNotificationsUpdated = (rawNotifs: any[]) => {
-    setNotifications(applyReadState(rawNotifs, currentUser?.id));
+  const handleMessageNotificationsUpdated = (rawNotifs: any[]) => {
+    const tagged = rawNotifs.map((n) => ({
+      ...n,
+      type: n.type || 'message',
+    }));
+    setMessageNotifications(applyReadState(tagged, currentUser?.id));
   };
 
   const handleMarkNotificationAsRead = (notifId: string) => {
@@ -3094,14 +3349,17 @@ export default function App() {
     currentIds.add(notifId);
     saveReadNotifIds(currentUser.id, Array.from(currentIds));
 
-    setNotifications((prev) =>
+    setMessageNotifications((prev) =>
+      prev.map((n) => (n.id === notifId ? { ...n, read: true } : n))
+    );
+    setActivityNotifications((prev) =>
       prev.map((n) => (n.id === notifId ? { ...n, read: true } : n))
     );
   };
 
   const handleMarkContactNotificationsAsRead = (contactId: string) => {
     if (!currentUser) return;
-    setNotifications((prev) => {
+    setMessageNotifications((prev) => {
       const currentIds = new Set(getReadNotifIds(currentUser.id));
       const updated = prev.map((n) => {
         if (n.fromId === contactId) {
@@ -3117,8 +3375,15 @@ export default function App() {
 
   const handleMarkAllNotificationsAsRead = () => {
     if (!currentUser) return;
-    setNotifications((prev) => {
-      const currentIds = new Set(getReadNotifIds(currentUser.id));
+    const currentIds = new Set(getReadNotifIds(currentUser.id));
+
+    setMessageNotifications((prev) => {
+      prev.forEach((n) => currentIds.add(n.id));
+      saveReadNotifIds(currentUser.id, Array.from(currentIds));
+      return prev.map((n) => ({ ...n, read: true }));
+    });
+
+    setActivityNotifications((prev) => {
       prev.forEach((n) => currentIds.add(n.id));
       saveReadNotifIds(currentUser.id, Array.from(currentIds));
       return prev.map((n) => ({ ...n, read: true }));
@@ -3142,6 +3407,8 @@ export default function App() {
     };
 
     loadReviews();
+    const interval = setInterval(loadReviews, 15000);
+    return () => clearInterval(interval);
   }, []);
 
   // Persiste alterações do feed no DynamoDB (somente usuário autenticado)
@@ -3238,7 +3505,7 @@ export default function App() {
   // Busca notificações de novas mensagens a cada 15 segundos para usuários logados
   useEffect(() => {
     if (!currentUser) {
-      setNotifications([]);
+      setMessageNotifications([]);
       return;
     }
 
@@ -3254,9 +3521,7 @@ export default function App() {
         });
         if (res.ok) {
           const data = await res.json();
-          setNotifications(
-            applyReadState(data.notifications || [], currentUser.id)
-          );
+          handleMessageNotificationsUpdated(data.notifications || []);
         }
       } catch (err) {
         console.error('Erro ao buscar notificações:', err);
@@ -3268,19 +3533,17 @@ export default function App() {
     return () => clearInterval(interval);
   }, [currentUser]);
 
-  // Bloqueia acesso à aba de mensagens para visitantes não logados
-  useEffect(() => {
-    if (currentView === 'messages' && !currentUser && !authLoading) {
-      setCurrentView('auth');
-    }
-  }, [currentView, currentUser, authLoading]);
-
-  // Monta lista de perfis reais disponíveis para trocar mensagens (exclui o usuário atual)
-  const availableContacts = React.useMemo(() => {
+  // Mapa com todos os usuários conhecidos (autores, comentaristas, curtidores)
+  const knownUsersMap = React.useMemo(() => {
     const map = new Map<string, any>();
 
     reviews.forEach((r) => {
       if (r.user?.id) map.set(r.user.id, r.user);
+      if (r.likedUsers && typeof r.likedUsers === 'object') {
+        Object.values(r.likedUsers).forEach((u: any) => {
+          if (u?.id) map.set(u.id, u);
+        });
+      }
       (r.comments || []).forEach((c: any) => {
         if (c.user?.id) map.set(c.user.id, c.user);
         (c.replies || []).forEach((rep: any) => {
@@ -3289,7 +3552,7 @@ export default function App() {
       });
     });
 
-    notifications.forEach((n) => {
+    messageNotifications.forEach((n) => {
       if (n.fromId && !map.has(n.fromId)) {
         map.set(n.fromId, {
           id: n.fromId,
@@ -3301,11 +3564,126 @@ export default function App() {
     });
 
     if (currentUser?.id) {
-      map.delete(currentUser.id);
+      map.set(currentUser.id, currentUser);
     }
 
+    return map;
+  }, [reviews, messageNotifications, currentUser]);
+
+  // Deriva notificações de curtidas e comentários feitas por outros leitores nas suas publicações
+  useEffect(() => {
+    if (!currentUser) {
+      setActivityNotifications([]);
+      return;
+    }
+
+    const derived: any[] = [];
+
+    reviews.forEach((review) => {
+      const bookTitle = review.book?.title || '';
+
+      // 1. Curtidas na sua resenha
+      if (review.user?.id === currentUser.id) {
+        (review.likedBy || []).forEach((likerId: string) => {
+          if (likerId === currentUser.id) return;
+          const liker =
+            review.likedUsers?.[likerId] || knownUsersMap.get(likerId);
+          derived.push({
+            id: `like_review_${review.id}_${likerId}`,
+            type: 'like_review',
+            fromId: likerId,
+            fromName: liker?.name || 'Um leitor',
+            fromAvatar: liker?.avatar || '',
+            bookTitle,
+            reviewId: review.id,
+            text: '',
+            createdAt: review.createdAt,
+            read: false,
+          });
+        });
+
+        // 2. Comentários na sua resenha
+        (review.comments || []).forEach((comment: any) => {
+          if (comment.user?.id && comment.user.id !== currentUser.id) {
+            derived.push({
+              id: `comment_${review.id}_${comment.id}`,
+              type: 'comment',
+              fromId: comment.user.id,
+              fromName: comment.user.name || 'Um leitor',
+              fromAvatar: comment.user.avatar || '',
+              bookTitle,
+              reviewId: review.id,
+              text: comment.text,
+              createdAt: comment.createdAt || '',
+              read: false,
+            });
+          }
+        });
+      }
+
+      // 3. Curtidas e respostas nos seus comentários
+      (review.comments || []).forEach((comment: any) => {
+        if (comment.user?.id === currentUser.id) {
+          (comment.likedBy || []).forEach((likerId: string) => {
+            if (likerId === currentUser.id) return;
+            const liker = knownUsersMap.get(likerId);
+            derived.push({
+              id: `like_comment_${review.id}_${comment.id}_${likerId}`,
+              type: 'like_comment',
+              fromId: likerId,
+              fromName: liker?.name || 'Um leitor',
+              fromAvatar: liker?.avatar || '',
+              bookTitle,
+              reviewId: review.id,
+              text: comment.text,
+              createdAt: '',
+              read: false,
+            });
+          });
+
+          (comment.replies || []).forEach((reply: any) => {
+            if (reply.user?.id && reply.user.id !== currentUser.id) {
+              derived.push({
+                id: `reply_${review.id}_${comment.id}_${reply.id}`,
+                type: 'reply',
+                fromId: reply.user.id,
+                fromName: reply.user.name || 'Um leitor',
+                fromAvatar: reply.user.avatar || '',
+                bookTitle,
+                reviewId: review.id,
+                text: reply.text,
+                createdAt: '',
+                read: false,
+              });
+            }
+          });
+        }
+      });
+    });
+
+    setActivityNotifications(applyReadState(derived, currentUser.id));
+  }, [reviews, currentUser, knownUsersMap]);
+
+  // Lista unificada de notificações (mensagens + curtidas + comentários)
+  const allNotifications = React.useMemo(() => {
+    return [...messageNotifications, ...activityNotifications];
+  }, [messageNotifications, activityNotifications]);
+
+  // Bloqueia acesso à aba de mensagens para visitantes não logados
+  useEffect(() => {
+    if (currentView === 'messages' && !currentUser && !authLoading) {
+      setCurrentView('auth');
+    }
+  }, [currentView, currentUser, authLoading]);
+
+  // Monta lista de perfis reais disponíveis para trocar mensagens (exclui o usuário atual)
+  const availableContacts = React.useMemo(() => {
+    const map = new Map<string, any>(knownUsersMap);
+    if (currentUser?.id) {
+      map.delete(currentUser.id);
+    }
     return Array.from(map.values());
-  }, [reviews, notifications, currentUser]);
+  }, [knownUsersMap, currentUser]);
 
   const handleUserClick = (user: any) => {
     setViewedUser(user);
@@ -3324,6 +3702,15 @@ export default function App() {
   const handleOpenNotification = (notif: any) => {
     if (!currentUser) return;
     handleMarkNotificationAsRead(notif.id);
+
+    if (notif.type && notif.type !== 'message') {
+      setCurrentView('feed');
+      if (notif.reviewId) {
+        setHighlightedReviewId(notif.reviewId);
+      }
+      return;
+    }
+
     handleMarkContactNotificationsAsRead(notif.fromId);
 
     const found = availableContacts.find((c) => c.id === notif.fromId) || {
@@ -3340,7 +3727,8 @@ export default function App() {
     try {
       await signOut();
       setCurrentUser(null);
-      setNotifications([]);
+      setMessageNotifications([]);
+      setActivityNotifications([]);
       setCurrentView('feed');
       setViewedUser(null);
     } catch (error) {
@@ -3359,6 +3747,13 @@ export default function App() {
     setReviews((prev) => {
       const updated = prev.map((review) => {
         const updatedReview = updateObj(review);
+
+        if (updatedReview.likedUsers?.[updatedUser.id]) {
+          updatedReview.likedUsers = {
+            ...updatedReview.likedUsers,
+            [updatedUser.id]: updatedUser,
+          };
+        }
 
         updatedReview.comments = updatedReview.comments.map((comment: any) => {
           const updatedComment = updateObj(comment);
@@ -3420,14 +3815,30 @@ export default function App() {
     }
 
     setReviews((prev) => {
-      const updated = prev.map((review) =>
-        review.id === reviewId
-          ? {
-              ...review,
-              likedBy: toggleArray(review.likedBy, currentUser.id),
-            }
-          : review
-      );
+      const updated = prev.map((review) => {
+        if (review.id !== reviewId) return review;
+
+        const alreadyLiked = review.likedBy.includes(currentUser.id);
+        const nextLikedBy = toggleArray(review.likedBy, currentUser.id);
+        const nextLikedUsers = { ...(review.likedUsers || {}) };
+
+        if (alreadyLiked) {
+          delete nextLikedUsers[currentUser.id];
+        } else {
+          nextLikedUsers[currentUser.id] = {
+            id: currentUser.id,
+            name: currentUser.name,
+            avatar: currentUser.avatar || '',
+            bio: currentUser.bio || '',
+          };
+        }
+
+        return {
+          ...review,
+          likedBy: nextLikedBy,
+          likedUsers: nextLikedUsers,
+        };
+      });
       persistReviews(updated);
       return updated;
     });
@@ -3626,6 +4037,7 @@ export default function App() {
       rating,
       text,
       likedBy: [],
+      likedUsers: {},
       comments: [],
       createdAt: new Date().toISOString(),
     };
@@ -3638,7 +4050,7 @@ export default function App() {
     setCurrentView('feed');
   };
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadMessagesCount = messageNotifications.filter((n) => !n.read).length;
 
   return (
     <div className="min-h-screen bg-[#F5F1E9] font-body text-[#1F1C18] pb-24 md:pb-12 selection:bg-[#1E3A2F] selection:text-[#FBF9F5]">
@@ -3676,7 +4088,8 @@ export default function App() {
         setView={setCurrentView}
         handleLogout={handleLogout}
         onUserClick={handleUserClick}
-        notifications={notifications}
+        notifications={allNotifications}
+        unreadMessagesCount={unreadMessagesCount}
         onOpenNotification={handleOpenNotification}
         onMarkAsRead={handleMarkNotificationAsRead}
         onMarkAllAsRead={handleMarkAllNotificationsAsRead}
@@ -3758,11 +4171,14 @@ export default function App() {
               <FeedView
                 currentUser={currentUser}
                 reviews={reviews}
+                knownUsersMap={knownUsersMap}
                 onUserClick={handleUserClick}
                 onRequireAuth={() => setCurrentView('auth')}
                 onShowToast={showToast}
                 onRequestConfirm={requestConfirm}
                 onGoToSearch={() => setCurrentView('search')}
+                highlightedReviewId={highlightedReviewId}
+                onClearHighlightedReview={() => setHighlightedReviewId(null)}
                 actions={{
                   onEditReview: handleEditReview,
                   onDeleteReview: handleDeleteReview,
@@ -3791,8 +4207,10 @@ export default function App() {
                 currentUser={currentUser}
                 contacts={availableContacts}
                 initialRecipient={selectedChatUser}
-                notifications={notifications}
-                onNotificationsUpdated={handleNotificationsUpdated}
+                messageNotifications={messageNotifications}
+                onMessageNotificationsUpdated={
+                  handleMessageNotificationsUpdated
+                }
                 onMarkContactRead={handleMarkContactNotificationsAsRead}
                 onShowToast={showToast}
                 onUserClick={handleUserClick}
@@ -3823,7 +4241,7 @@ export default function App() {
         currentView={currentView}
         setView={setCurrentView}
         onUserClick={handleUserClick}
-        unreadCount={unreadCount}
+        unreadCount={unreadMessagesCount}
       />
 
       {/* Chatbot flutuante — FAQ local para visitantes e IA (Gemini) para logados */}
