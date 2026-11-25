@@ -22,13 +22,13 @@ import {
 } from 'aws-amplify/auth';
 
 
-// 1. URL original do WebSocket do Chat
+// 1. URL do WebSocket do Chat via DNS customizado (sem barra no final para não quebrar o ?token=)
 const WEBSOCKET_URL =
-  'wss://m45jpb90s4.execute-api.us-east-1.amazonaws.com/dev/';
+  'wss://chat.aparecida.dunga.web.ufersa.dev.br';
 
-// 2. URL da HTTP API com /profile no final
+// 2. URL da HTTP API via DNS customizado com /profile no final
 const PROFILE_API_URL =
-  'https://8epdgbn6f3.execute-api.us-east-1.amazonaws.com/profile';
+  'https://api.aparecida.dunga.web.ufersa.dev.br/profile';
 
 // --- MOCK DATA INICIAL ---
 const MOCK_USERS = {
