@@ -15,6 +15,8 @@ import {
   Bell,
   Bot,
   Trash2,
+  Check,
+  CheckCheck,
 } from 'lucide-react';
 
 import {
@@ -59,61 +61,6 @@ const GUEST_FAQ = [
     question: 'Preciso de conta para usar o site?',
     answer:
       'Como visitante, você já pode explorar e pesquisar resenhas no Feed e buscar livros no acervo. Criando uma conta gratuita, você libera resenhas, curtidas, comentários, mensagens diretas e o assistente de IA completo!',
-  },
-];
-
-// --- MOCK DATA INICIAL ---
-const MOCK_USERS: Record<string, any> = {
-  u2: {
-    id: 'u2',
-    name: 'João Silva',
-    avatar: '',
-    bio: 'Fã de fantasia épica e sci-fi.',
-  },
-  u3: {
-    id: 'u3',
-    name: 'Carla Dias',
-    avatar: '',
-    bio: 'Leitora voraz. Amo distopias.',
-  },
-  u4: {
-    id: 'u4',
-    name: 'Marcos Paulo',
-    avatar: '',
-    bio: 'Devorador de clássicos.',
-  },
-};
-
-const INITIAL_REVIEWS = [
-  {
-    id: 'r1',
-    user: MOCK_USERS.u2,
-    book: {
-      id: 'b1',
-      title: 'O Senhor dos Anéis',
-      author: 'J.R.R. Tolkien',
-      cover: 'https://covers.openlibrary.org/b/id/9251899-M.jpg',
-    },
-    rating: 5,
-    text: 'Uma obra prima absoluta! A construção do mundo é incrível.',
-    likedBy: ['u3'],
-    comments: [
-      {
-        id: 'c1',
-        user: MOCK_USERS.u3,
-        text: 'Concordo plenamente! É o meu livro favorito.',
-        likedBy: ['u2'],
-        replies: [
-          {
-            id: 'rep1',
-            user: MOCK_USERS.u2,
-            text: 'Você leu os apêndices também?',
-            likedBy: [],
-          },
-        ],
-      },
-    ],
-    createdAt: new Date(Date.now() - 10000000).toISOString(),
   },
 ];
 
@@ -200,6 +147,8 @@ const Header = ({
   onUserClick,
   notifications,
   onOpenNotification,
+  onMarkAsRead,
+  onMarkAllAsRead,
 }: {
   currentUser: any;
   currentView: string;
@@ -208,6 +157,8 @@ const Header = ({
   onUserClick: (user: any) => void;
   notifications: any[];
   onOpenNotification: (notif: any) => void;
+  onMarkAsRead: (notifId: string) => void;
+  onMarkAllAsRead: () => void;
 }) => {
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -293,12 +244,25 @@ const Header = ({
                         <span className="font-semibold text-sm text-gray-800">
                           Notificações
                         </span>
-                        <button
-                          onClick={() => setShowNotifDropdown(false)}
-                          className="text-gray-400 hover:text-gray-600"
-                        >
-                          <X size={16} />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {unreadCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={onMarkAllAsRead}
+                              className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                              title="Marcar todas como lidas"
+                            >
+                              <CheckCheck size={14} />
+                              <span>Marcar todas</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setShowNotifDropdown(false)}
+                            className="text-gray-400 hover:text-gray-600"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
                       </div>
 
                       <div className="max-h-72 overflow-y-auto divide-y divide-gray-100">
@@ -308,13 +272,13 @@ const Header = ({
                           </div>
                         ) : (
                           notifications.map((notif) => (
-                            <button
+                            <div
                               key={notif.id}
                               onClick={() => {
                                 setShowNotifDropdown(false);
                                 onOpenNotification(notif);
                               }}
-                              className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors flex items-start gap-3 ${
+                              className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors flex items-start gap-3 cursor-pointer ${
                                 !notif.read ? 'bg-indigo-50/50' : ''
                               }`}
                             >
@@ -344,10 +308,21 @@ const Header = ({
                                     : ''}
                                 </span>
                               </div>
+
                               {!notif.read && (
-                                <span className="w-2 h-2 rounded-full bg-indigo-600 mt-2 shrink-0" />
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onMarkAsRead(notif.id);
+                                  }}
+                                  className="p-1 text-indigo-600 hover:bg-indigo-100 rounded-full shrink-0 mt-1 transition-colors"
+                                  title="Marcar como lida"
+                                >
+                                  <Check size={14} />
+                                </button>
                               )}
-                            </button>
+                            </div>
                           ))
                         )}
                       </div>
@@ -400,6 +375,8 @@ const ProfileView = ({
   onSaveProfile,
   onSendMessage,
   reviews,
+  onEditReview,
+  onDeleteReview,
   onBack,
 }: {
   profileUser: any;
@@ -407,6 +384,8 @@ const ProfileView = ({
   onSaveProfile: (user: any) => void;
   onSendMessage: (user: any) => void;
   reviews: any[];
+  onEditReview: (reviewId: string, data: { rating: number; text: string }) => void;
+  onDeleteReview: (reviewId: string) => void;
   onBack: () => void;
 }) => {
   const isOwnProfile = currentUser && currentUser.id === profileUser.id;
@@ -419,9 +398,35 @@ const ProfileView = ({
   const [newImageType, setNewImageType] = useState<string>('image/jpeg');
   const [isSaving, setIsSaving] = useState(false);
 
+  // Estado para edição de resenha dentro do perfil
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
+  const [editRating, setEditRating] = useState(0);
+  const [editText, setEditText] = useState('');
+
   const userReviews = reviews.filter(
     (review) => review.user.id === profileUser.id
   );
+
+  const startEditingReview = (review: any) => {
+    setEditingReviewId(review.id);
+    setEditRating(review.rating);
+    setEditText(review.text);
+  };
+
+  const cancelEditingReview = () => {
+    setEditingReviewId(null);
+    setEditRating(0);
+    setEditText('');
+  };
+
+  const saveEditedReview = (reviewId: string) => {
+    if (editRating === 0 || !editText.trim()) {
+      alert('Preencha a nota e o texto da resenha!');
+      return;
+    }
+    onEditReview(reviewId, { rating: editRating, text: editText.trim() });
+    cancelEditingReview();
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -632,36 +637,107 @@ const ProfileView = ({
         </p>
       ) : (
         <div className="space-y-4">
-          {userReviews.map((review) => (
-            <div
-              key={review.id}
-              className="bg-white p-4 rounded-xl border border-gray-200 flex gap-4 items-start shadow-sm"
-            >
-              <img
-                src={review.book.cover}
-                alt="Capa"
-                className="w-16 h-24 object-cover rounded shadow-sm"
-              />
+          {userReviews.map((review) => {
+            const isEditingThis = editingReviewId === review.id;
 
-              <div>
-                <h4 className="font-bold text-gray-900">
-                  {review.book.title}
-                </h4>
-                <RatingStars rating={review.rating} />
-                <p className="text-gray-700 mt-2 text-sm">"{review.text}"</p>
-                <span className="text-xs text-gray-400 mt-2 block">
-                  {new Date(review.createdAt).toLocaleDateString()}
-                </span>
+            return (
+              <div
+                key={review.id}
+                className="bg-white p-4 rounded-xl border border-gray-200 flex gap-4 items-start shadow-sm"
+              >
+                <img
+                  src={review.book.cover}
+                  alt="Capa"
+                  className="w-16 h-24 object-cover rounded shadow-sm shrink-0"
+                />
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h4 className="font-bold text-gray-900">
+                        {review.book.title}
+                      </h4>
+                      {!isEditingThis && <RatingStars rating={review.rating} />}
+                    </div>
+
+                    {isOwnProfile && !isEditingThis && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => startEditingReview(review)}
+                          className="text-gray-400 hover:text-indigo-600 p-1 rounded transition-colors"
+                          title="Editar resenha"
+                        >
+                          <Edit3 size={16} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                'Tem certeza que deseja excluir esta resenha?'
+                              )
+                            ) {
+                              onDeleteReview(review.id);
+                            }
+                          }}
+                          className="text-gray-400 hover:text-red-600 p-1 rounded transition-colors"
+                          title="Excluir resenha"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {isEditingThis ? (
+                    <div className="mt-2 space-y-3">
+                      <RatingStars
+                        rating={editRating}
+                        interactive
+                        onRate={setEditRating}
+                      />
+                      <textarea
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        rows={3}
+                        className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none"
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => saveEditedReview(review.id)}
+                          className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded-md text-xs font-medium hover:bg-indigo-700"
+                        >
+                          <Save size={14} />
+                          <span>Salvar</span>
+                        </button>
+                        <button
+                          onClick={cancelEditingReview}
+                          className="px-3 py-1.5 rounded-md text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-gray-700 mt-2 text-sm">
+                        "{review.text}"
+                      </p>
+                      <span className="text-xs text-gray-400 mt-2 block">
+                        {new Date(review.createdAt).toLocaleDateString()}
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
   );
 };
 
-// 3. FEED E COMENTÁRIOS (COM BUSCA DE RESENHAS PARA VISITANTES E LOGADOS + EXCLUSÃO DE COMENTÁRIOS + TOGGLE DE CURTIDA)
+// 3. FEED E COMENTÁRIOS (COM BUSCA DE RESENHAS + EDITAR/APAGAR PRÓPRIA RESENHA + EXCLUSÃO DE COMENTÁRIOS + TOGGLE DE CURTIDA)
 const FeedView = ({
   currentUser,
   reviews,
@@ -685,6 +761,35 @@ const FeedView = ({
     commentId: string;
   } | null>(null);
   const [replyText, setReplyText] = useState('');
+
+  // Estado para edição de resenha no feed
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
+  const [editRating, setEditRating] = useState(0);
+  const [editText, setEditText] = useState('');
+
+  const startEditingReview = (review: any) => {
+    setEditingReviewId(review.id);
+    setEditRating(review.rating);
+    setEditText(review.text);
+  };
+
+  const cancelEditingReview = () => {
+    setEditingReviewId(null);
+    setEditRating(0);
+    setEditText('');
+  };
+
+  const saveEditedReview = (reviewId: string) => {
+    if (editRating === 0 || !editText.trim()) {
+      alert('Preencha a nota e o texto da resenha!');
+      return;
+    }
+    actions.onEditReview(reviewId, {
+      rating: editRating,
+      text: editText.trim(),
+    });
+    cancelEditingReview();
+  };
 
   const normalizedQuery = normalizeText(feedSearch.trim());
   const filteredReviews = normalizedQuery
@@ -792,11 +897,14 @@ const FeedView = ({
         <div className="bg-white rounded-xl border border-gray-200 p-10 text-center shadow-sm fade-in">
           <BookOpen className="h-10 w-10 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-700 font-medium">
-            Nenhuma resenha encontrada para esse livro.
+            {feedSearch.trim()
+              ? 'Nenhuma resenha encontrada para esse livro.'
+              : 'Nenhuma resenha publicada ainda.'}
           </p>
           <p className="text-xs text-gray-500 mt-1">
-            Tente buscar por outro título, autor ou limpe a pesquisa para ver
-            todo o feed.
+            {feedSearch.trim()
+              ? 'Tente buscar por outro título, autor ou limpe a pesquisa para ver todo o feed.'
+              : 'Acesse "Buscar Livros" para ser o primeiro a publicar uma resenha!'}
           </p>
           {feedSearch && (
             <button
@@ -813,6 +921,9 @@ const FeedView = ({
           {filteredReviews.map((review) => {
             const hasLikedReview =
               currentUser && review.likedBy.includes(currentUser.id);
+            const isOwnReview =
+              currentUser && review.user.id === currentUser.id;
+            const isEditingThis = editingReviewId === review.id;
 
             return (
               <div
@@ -841,7 +952,36 @@ const FeedView = ({
                       </div>
                     </div>
 
-                    <RatingStars rating={review.rating} />
+                    <div className="flex items-center gap-3">
+                      {!isEditingThis && <RatingStars rating={review.rating} />}
+
+                      {isOwnReview && !isEditingThis && (
+                        <div className="flex items-center gap-1 border-l border-gray-200 pl-2">
+                          <button
+                            onClick={() => startEditingReview(review)}
+                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                            title="Editar resenha"
+                          >
+                            <Edit3 size={16} />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  'Tem certeza que deseja excluir esta resenha?'
+                                )
+                              ) {
+                                actions.onDeleteReview(review.id);
+                              }
+                            }}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                            title="Excluir resenha"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-4 mb-4 bg-gray-50 p-3 rounded-lg">
@@ -851,16 +991,53 @@ const FeedView = ({
                       className="w-20 h-32 object-cover rounded shadow-sm flex-shrink-0 bg-white"
                     />
 
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <h3 className="font-bold text-lg text-gray-900 leading-tight">
                         {review.book.title}
                       </h3>
                       <p className="text-sm text-gray-600 mb-2">
                         por {review.book.author}
                       </p>
-                      <p className="text-gray-800 text-sm md:text-base italic">
-                        "{review.text}"
-                      </p>
+
+                      {isEditingThis ? (
+                        <div className="space-y-3 mt-2">
+                          <div>
+                            <span className="text-xs text-gray-500 block mb-1">
+                              Alterar nota:
+                            </span>
+                            <RatingStars
+                              rating={editRating}
+                              interactive
+                              onRate={setEditRating}
+                            />
+                          </div>
+                          <textarea
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            rows={3}
+                            className="w-full bg-white border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none"
+                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => saveEditedReview(review.id)}
+                              className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded-md text-xs font-medium hover:bg-indigo-700"
+                            >
+                              <Save size={14} />
+                              <span>Salvar alterações</span>
+                            </button>
+                            <button
+                              onClick={cancelEditingReview}
+                              className="px-3 py-1.5 rounded-md text-xs font-medium text-gray-600 bg-white border border-gray-300 hover:bg-gray-100"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-gray-800 text-sm md:text-base italic">
+                          "{review.text}"
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -1402,11 +1579,13 @@ const DirectMessagesView = ({
   contacts,
   initialRecipient,
   onNotificationsUpdated,
+  onMarkContactRead,
 }: {
   currentUser: any;
   contacts: any[];
   initialRecipient: any;
   onNotificationsUpdated: (notifs: any[]) => void;
+  onMarkContactRead: (contactId: string) => void;
 }) => {
   const [selectedContact, setSelectedContact] = useState<any>(
     initialRecipient || contacts[0] || null
@@ -1419,8 +1598,10 @@ const DirectMessagesView = ({
   useEffect(() => {
     if (initialRecipient) {
       setSelectedContact(initialRecipient);
+    } else if (!selectedContact && contacts.length > 0) {
+      setSelectedContact(contacts[0]);
     }
-  }, [initialRecipient]);
+  }, [initialRecipient, contacts]);
 
   const fetchConversation = async (contactId: string, showLoader = false) => {
     if (!currentUser || !contactId) return;
@@ -1445,6 +1626,7 @@ const DirectMessagesView = ({
         if (data.notifications) {
           onNotificationsUpdated(data.notifications);
         }
+        onMarkContactRead(contactId);
       }
     } catch (error) {
       console.error('Erro ao carregar mensagens:', error);
@@ -1455,6 +1637,7 @@ const DirectMessagesView = ({
 
   useEffect(() => {
     if (!selectedContact) return;
+    onMarkContactRead(selectedContact.id);
     fetchConversation(selectedContact.id, true);
 
     const interval = setInterval(() => {
@@ -1520,34 +1703,40 @@ const DirectMessagesView = ({
             Perfis da Comunidade
           </div>
           <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
-            {contacts.map((contact) => {
-              const isSelected = selectedContact?.id === contact.id;
-              return (
-                <button
-                  key={contact.id}
-                  onClick={() => setSelectedContact(contact)}
-                  className={`w-full p-3 flex items-center gap-3 text-left transition-colors ${
-                    isSelected
-                      ? 'bg-indigo-50 border-r-4 border-indigo-600'
-                      : 'hover:bg-gray-100'
-                  }`}
-                >
-                  <AvatarDisplay
-                    src={contact.avatar}
-                    alt={contact.name}
-                    className="w-10 h-10 rounded-full text-sm"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-sm text-gray-900 truncate">
-                      {contact.name}
-                    </p>
-                    <p className="text-xs text-gray-500 truncate">
-                      {contact.bio || 'Leitor do BookConnect'}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
+            {contacts.length === 0 ? (
+              <div className="p-4 text-center text-xs text-gray-400">
+                Nenhum outro leitor disponível no momento.
+              </div>
+            ) : (
+              contacts.map((contact) => {
+                const isSelected = selectedContact?.id === contact.id;
+                return (
+                  <button
+                    key={contact.id}
+                    onClick={() => setSelectedContact(contact)}
+                    className={`w-full p-3 flex items-center gap-3 text-left transition-colors ${
+                      isSelected
+                        ? 'bg-indigo-50 border-r-4 border-indigo-600'
+                        : 'hover:bg-gray-100'
+                    }`}
+                  >
+                    <AvatarDisplay
+                      src={contact.avatar}
+                      alt={contact.name}
+                      className="w-10 h-10 rounded-full text-sm"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm text-gray-900 truncate">
+                        {contact.name}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {contact.bio || 'Leitor do BookConnect'}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
 
@@ -2191,7 +2380,7 @@ const AuthView = ({ error }: { error: string }) => {
 export default function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentView, setCurrentView] = useState('feed');
-  const [reviews, setReviews] = useState<any[]>(INITIAL_REVIEWS);
+  const [reviews, setReviews] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [selectedChatUser, setSelectedChatUser] = useState<any>(null);
 
@@ -2200,6 +2389,71 @@ export default function App() {
 
   const [viewedUser, setViewedUser] = useState<any>(null);
 
+  // --- CONTROLE DE NOTIFICAÇÕES LIDAS (PERSISTIDO NO LOCALSTORAGE POR USUÁRIO) ---
+  const getReadNotifIds = (userId: string): string[] => {
+    try {
+      const saved = localStorage.getItem(`read_notifs_${userId}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const saveReadNotifIds = (userId: string, ids: string[]) => {
+    try {
+      localStorage.setItem(`read_notifs_${userId}`, JSON.stringify(ids));
+    } catch {
+      // ignora erro de storage
+    }
+  };
+
+  const applyReadState = (rawNotifs: any[], userId?: string) => {
+    if (!userId) return rawNotifs;
+    const readIds = new Set(getReadNotifIds(userId));
+    return rawNotifs.map((n) => (readIds.has(n.id) ? { ...n, read: true } : n));
+  };
+
+  const handleNotificationsUpdated = (rawNotifs: any[]) => {
+    setNotifications(applyReadState(rawNotifs, currentUser?.id));
+  };
+
+  const handleMarkNotificationAsRead = (notifId: string) => {
+    if (!currentUser) return;
+    const currentIds = new Set(getReadNotifIds(currentUser.id));
+    currentIds.add(notifId);
+    saveReadNotifIds(currentUser.id, Array.from(currentIds));
+
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notifId ? { ...n, read: true } : n))
+    );
+  };
+
+  const handleMarkContactNotificationsAsRead = (contactId: string) => {
+    if (!currentUser) return;
+    setNotifications((prev) => {
+      const currentIds = new Set(getReadNotifIds(currentUser.id));
+      const updated = prev.map((n) => {
+        if (n.fromId === contactId) {
+          currentIds.add(n.id);
+          return { ...n, read: true };
+        }
+        return n;
+      });
+      saveReadNotifIds(currentUser.id, Array.from(currentIds));
+      return updated;
+    });
+  };
+
+  const handleMarkAllNotificationsAsRead = () => {
+    if (!currentUser) return;
+    setNotifications((prev) => {
+      const currentIds = new Set(getReadNotifIds(currentUser.id));
+      prev.forEach((n) => currentIds.add(n.id));
+      saveReadNotifIds(currentUser.id, Array.from(currentIds));
+      return prev.map((n) => ({ ...n, read: true }));
+    });
+  };
+
   // Carrega as resenhas, curtidas e comentários salvos no DynamoDB (público para visitantes)
   useEffect(() => {
     const loadReviews = async () => {
@@ -2207,12 +2461,12 @@ export default function App() {
         const res = await fetch(REVIEWS_API_URL, { method: 'GET' });
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data.reviews) && data.reviews.length > 0) {
+          if (Array.isArray(data.reviews)) {
             setReviews(data.reviews);
           }
         }
       } catch (err) {
-        console.log('Usando resenhas iniciais enquanto /reviews não responde.');
+        console.log('Não foi possível carregar resenhas de /reviews.');
       }
     };
 
@@ -2329,7 +2583,9 @@ export default function App() {
         });
         if (res.ok) {
           const data = await res.json();
-          setNotifications(data.notifications || []);
+          setNotifications(
+            applyReadState(data.notifications || [], currentUser.id)
+          );
         }
       } catch (err) {
         console.error('Erro ao buscar notificações:', err);
@@ -2348,11 +2604,9 @@ export default function App() {
     }
   }, [currentView, currentUser, authLoading]);
 
-  // Monta lista de perfis disponíveis para trocar mensagens (exclui o usuário atual)
+  // Monta lista de perfis reais disponíveis para trocar mensagens (exclui o usuário atual)
   const availableContacts = React.useMemo(() => {
     const map = new Map<string, any>();
-
-    Object.values(MOCK_USERS).forEach((u) => map.set(u.id, u));
 
     reviews.forEach((r) => {
       if (r.user?.id) map.set(r.user.id, r.user);
@@ -2398,6 +2652,9 @@ export default function App() {
 
   const handleOpenNotification = (notif: any) => {
     if (!currentUser) return;
+    handleMarkNotificationAsRead(notif.id);
+    handleMarkContactNotificationsAsRead(notif.fromId);
+
     const found = availableContacts.find((c) => c.id === notif.fromId) || {
       id: notif.fromId,
       name: notif.fromName || 'Usuário',
@@ -2449,11 +2706,41 @@ export default function App() {
     });
   };
 
-  // --- LÓGICA DE CURTIDAS E COMENTÁRIOS (APENAS LOGADOS + SALVANDO NO DYNAMODB) ---
+  // --- LÓGICA DE RESENHAS, CURTIDAS E COMENTÁRIOS (APENAS LOGADOS + SALVANDO NO DYNAMODB) ---
   const toggleArray = (arr: string[], value: string) =>
     arr.includes(value)
       ? arr.filter((item) => item !== value)
       : [...arr, value];
+
+  const handleEditReview = (
+    reviewId: string,
+    { rating, text }: { rating: number; text: string }
+  ) => {
+    if (!currentUser) return;
+
+    setReviews((prev) => {
+      const updated = prev.map((review) =>
+        review.id === reviewId && review.user.id === currentUser.id
+          ? { ...review, rating, text }
+          : review
+      );
+      persistReviews(updated);
+      return updated;
+    });
+  };
+
+  const handleDeleteReview = (reviewId: string) => {
+    if (!currentUser) return;
+
+    setReviews((prev) => {
+      const updated = prev.filter(
+        (review) =>
+          !(review.id === reviewId && review.user.id === currentUser.id)
+      );
+      persistReviews(updated);
+      return updated;
+    });
+  };
 
   const handleLikeReview = (reviewId: string) => {
     if (!currentUser) {
@@ -2690,6 +2977,8 @@ export default function App() {
         onUserClick={handleUserClick}
         notifications={notifications}
         onOpenNotification={handleOpenNotification}
+        onMarkAsRead={handleMarkNotificationAsRead}
+        onMarkAllAsRead={handleMarkAllNotificationsAsRead}
       />
 
       <main>
@@ -2726,6 +3015,8 @@ export default function App() {
                 onUserClick={handleUserClick}
                 onRequireAuth={() => setCurrentView('auth')}
                 actions={{
+                  onEditReview: handleEditReview,
+                  onDeleteReview: handleDeleteReview,
                   onToggleLikeReview: handleLikeReview,
                   onToggleLikeComment: handleLikeComment,
                   onToggleLikeReply: handleLikeReply,
@@ -2750,7 +3041,8 @@ export default function App() {
                 currentUser={currentUser}
                 contacts={availableContacts}
                 initialRecipient={selectedChatUser}
-                onNotificationsUpdated={setNotifications}
+                onNotificationsUpdated={handleNotificationsUpdated}
+                onMarkContactRead={handleMarkContactNotificationsAsRead}
               />
             )}
 
@@ -2761,6 +3053,8 @@ export default function App() {
                 reviews={reviews}
                 onSaveProfile={handleSaveProfile}
                 onSendMessage={handleSendMessageClick}
+                onEditReview={handleEditReview}
+                onDeleteReview={handleDeleteReview}
                 onBack={() => setCurrentView('feed')}
               />
             )}
