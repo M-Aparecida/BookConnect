@@ -14,6 +14,7 @@ import {
   Save,
   Bell,
   Bot,
+  Trash2,
 } from 'lucide-react';
 
 import {
@@ -31,6 +32,35 @@ const API_BASE_URL = 'https://api.aparecida.dunga.web.ufersa.dev.br';
 const PROFILE_API_URL = `${API_BASE_URL}/profile`;
 const REVIEWS_API_URL = `${API_BASE_URL}/reviews`;
 const MESSAGES_API_URL = `${API_BASE_URL}/messages`;
+
+// --- PERGUNTAS RÁPIDAS DO CHATBOT (MODO VISITANTE) ---
+const GUEST_FAQ = [
+  {
+    question: 'O que é o BookConnect?',
+    answer:
+      'O BookConnect é uma rede social para leitores! Aqui você descobre novos livros, lê e publica resenhas, curte e comenta opiniões e conversa com outros apaixonados por literatura.',
+  },
+  {
+    question: 'Como avaliar um livro?',
+    answer:
+      'Acesse a aba "Buscar Livros", pesquise pelo título ou autor desejado e clique em "+ Fazer Resenha". Para publicar sua nota e opinião, basta estar conectado à sua conta.',
+  },
+  {
+    question: 'Como pesquisar resenhas de um livro?',
+    answer:
+      'No topo do Feed da Comunidade, use a barra de pesquisa para buscar pelo título do livro, autor, trecho da resenha ou nome do leitor.',
+  },
+  {
+    question: 'Como conversar com outros leitores?',
+    answer:
+      'Depois de fazer login, você pode usar a aba "Mensagens" ou clicar em "Enviar Mensagem" no perfil de qualquer usuário para iniciar um chat privado.',
+  },
+  {
+    question: 'Preciso de conta para usar o site?',
+    answer:
+      'Como visitante, você já pode explorar e pesquisar resenhas no Feed e buscar livros no acervo. Criando uma conta gratuita, você libera resenhas, curtidas, comentários, mensagens diretas e o assistente de IA completo!',
+  },
+];
 
 // --- MOCK DATA INICIAL ---
 const MOCK_USERS: Record<string, any> = {
@@ -86,6 +116,13 @@ const INITIAL_REVIEWS = [
     createdAt: new Date(Date.now() - 10000000).toISOString(),
   },
 ];
+
+// Utilitário para ignorar acentos e maiúsculas na busca
+const normalizeText = (text: string) =>
+  text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 
 // --- COMPONENTES AUXILIARES ---
 const RatingStars = ({
@@ -624,7 +661,7 @@ const ProfileView = ({
   );
 };
 
-// 3. FEED E COMENTÁRIOS (APENAS USUÁRIOS LOGADOS PODEM CURTIR E COMENTAR)
+// 3. FEED E COMENTÁRIOS (COM BUSCA DE RESENHAS PARA VISITANTES E LOGADOS + EXCLUSÃO DE COMENTÁRIOS + TOGGLE DE CURTIDA)
 const FeedView = ({
   currentUser,
   reviews,
@@ -638,6 +675,7 @@ const FeedView = ({
   onUserClick: (user: any) => void;
   onRequireAuth: () => void;
 }) => {
+  const [feedSearch, setFeedSearch] = useState('');
   const [activeCommentReview, setActiveCommentReview] = useState<string | null>(
     null
   );
@@ -647,6 +685,22 @@ const FeedView = ({
     commentId: string;
   } | null>(null);
   const [replyText, setReplyText] = useState('');
+
+  const normalizedQuery = normalizeText(feedSearch.trim());
+  const filteredReviews = normalizedQuery
+    ? reviews.filter((review) => {
+        const title = normalizeText(review.book?.title || '');
+        const author = normalizeText(review.book?.author || '');
+        const text = normalizeText(review.text || '');
+        const reviewer = normalizeText(review.user?.name || '');
+        return (
+          title.includes(normalizedQuery) ||
+          author.includes(normalizedQuery) ||
+          text.includes(normalizedQuery) ||
+          reviewer.includes(normalizedQuery)
+        );
+      })
+    : reviews;
 
   const submitComment = (reviewId: string) => {
     if (!currentUser || !commentText.trim()) return;
@@ -665,7 +719,7 @@ const FeedView = ({
 
   return (
     <div className="max-w-2xl mx-auto py-8 px-4">
-      <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">
             Feed da Comunidade
@@ -687,317 +741,437 @@ const FeedView = ({
         )}
       </div>
 
-      <div className="space-y-6">
-        {reviews.map((review) => {
-          const hasLikedReview =
-            currentUser && review.likedBy.includes(currentUser.id);
+      {/* Barra de Pesquisa de Resenhas (visível para visitantes e usuários logados) */}
+      <div className="mb-6">
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+            <Search className="h-4 w-4 text-gray-400" />
+          </div>
 
-          return (
-            <div
-              key={review.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden fade-in"
+          <input
+            type="text"
+            value={feedSearch}
+            onChange={(e) => setFeedSearch(e.target.value)}
+            placeholder="Pesquisar resenhas por livro, autor ou leitor..."
+            className="w-full pl-10 pr-10 py-2.5 bg-white border border-gray-300 rounded-xl text-sm text-gray-800 placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+          />
+
+          {feedSearch && (
+            <button
+              type="button"
+              onClick={() => setFeedSearch('')}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+              title="Limpar pesquisa"
             >
-              <div className="p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div
-                    className="flex items-center space-x-3 cursor-pointer group"
-                    onClick={() => onUserClick(review.user)}
-                  >
-                    <AvatarDisplay
-                      src={review.user.avatar}
-                      alt={review.user.name}
-                      className="w-10 h-10 rounded-full group-hover:opacity-80 transition-opacity"
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
+        {feedSearch.trim() && (
+          <div className="mt-2 flex items-center justify-between text-xs text-gray-500 px-1">
+            <span>
+              {filteredReviews.length === 0
+                ? `Nenhuma resenha encontrada para "${feedSearch.trim()}"`
+                : filteredReviews.length === 1
+                ? `1 resenha encontrada para "${feedSearch.trim()}"`
+                : `${filteredReviews.length} resenhas encontradas para "${feedSearch.trim()}"`}
+            </span>
+            <button
+              type="button"
+              onClick={() => setFeedSearch('')}
+              className="text-indigo-600 hover:underline font-medium"
+            >
+              Limpar filtro
+            </button>
+          </div>
+        )}
+      </div>
+
+      {filteredReviews.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center shadow-sm fade-in">
+          <BookOpen className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-700 font-medium">
+            Nenhuma resenha encontrada para esse livro.
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            Tente buscar por outro título, autor ou limpe a pesquisa para ver
+            todo o feed.
+          </p>
+          {feedSearch && (
+            <button
+              type="button"
+              onClick={() => setFeedSearch('')}
+              className="mt-4 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-100 transition-colors"
+            >
+              Ver todas as resenhas
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {filteredReviews.map((review) => {
+            const hasLikedReview =
+              currentUser && review.likedBy.includes(currentUser.id);
+
+            return (
+              <div
+                key={review.id}
+                className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden fade-in"
+              >
+                <div className="p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div
+                      className="flex items-center space-x-3 cursor-pointer group"
+                      onClick={() => onUserClick(review.user)}
+                    >
+                      <AvatarDisplay
+                        src={review.user.avatar}
+                        alt={review.user.name}
+                        className="w-10 h-10 rounded-full group-hover:opacity-80 transition-opacity"
+                      />
+
+                      <div>
+                        <h4 className="font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
+                          {review.user.name}
+                        </h4>
+                        <span className="text-xs text-gray-500">
+                          Avaliou um livro
+                        </span>
+                      </div>
+                    </div>
+
+                    <RatingStars rating={review.rating} />
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-4 mb-4 bg-gray-50 p-3 rounded-lg">
+                    <img
+                      src={review.book.cover}
+                      alt={review.book.title}
+                      className="w-20 h-32 object-cover rounded shadow-sm flex-shrink-0 bg-white"
                     />
 
                     <div>
-                      <h4 className="font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
-                        {review.user.name}
-                      </h4>
-                      <span className="text-xs text-gray-500">
-                        Avaliou um livro
-                      </span>
+                      <h3 className="font-bold text-lg text-gray-900 leading-tight">
+                        {review.book.title}
+                      </h3>
+                      <p className="text-sm text-gray-600 mb-2">
+                        por {review.book.author}
+                      </p>
+                      <p className="text-gray-800 text-sm md:text-base italic">
+                        "{review.text}"
+                      </p>
                     </div>
                   </div>
 
-                  <RatingStars rating={review.rating} />
-                </div>
+                  <div className="flex items-center pt-3 border-t border-gray-100 space-x-6">
+                    <button
+                      onClick={() => {
+                        if (!currentUser) {
+                          onRequireAuth();
+                          return;
+                        }
+                        actions.onToggleLikeReview(review.id);
+                      }}
+                      title={
+                        !currentUser
+                          ? 'Faça login para curtir'
+                          : hasLikedReview
+                          ? 'Remover curtida'
+                          : 'Curtir resenha'
+                      }
+                      className={`flex items-center space-x-1.5 transition-colors cursor-pointer ${
+                        hasLikedReview
+                          ? 'text-red-500'
+                          : 'text-gray-500 hover:text-red-500'
+                      }`}
+                    >
+                      <Heart
+                        size={20}
+                        fill={hasLikedReview ? 'currentColor' : 'none'}
+                      />
+                      <span className="font-medium text-sm">
+                        {review.likedBy.length}
+                      </span>
+                    </button>
 
-                <div className="flex flex-col sm:flex-row gap-4 mb-4 bg-gray-50 p-3 rounded-lg">
-                  <img
-                    src={review.book.cover}
-                    alt={review.book.title}
-                    className="w-20 h-32 object-cover rounded shadow-sm flex-shrink-0 bg-white"
-                  />
-
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-900 leading-tight">
-                      {review.book.title}
-                    </h3>
-                    <p className="text-sm text-gray-600 mb-2">
-                      por {review.book.author}
-                    </p>
-                    <p className="text-gray-800 text-sm md:text-base italic">
-                      "{review.text}"
-                    </p>
+                    <button
+                      onClick={() =>
+                        setActiveCommentReview(
+                          activeCommentReview === review.id ? null : review.id
+                        )
+                      }
+                      className="flex items-center space-x-1.5 text-gray-500 hover:text-indigo-500 transition-colors"
+                    >
+                      <MessageCircle size={20} />
+                      <span className="font-medium text-sm">
+                        {review.comments.length}
+                      </span>
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex items-center pt-3 border-t border-gray-100 space-x-6">
-                  <button
-                    onClick={() => {
-                      if (!currentUser) {
-                        onRequireAuth();
-                        return;
-                      }
-                      actions.onToggleLikeReview(review.id);
-                    }}
-                    title={
-                      !currentUser ? 'Faça login para curtir' : 'Curtir resenha'
-                    }
-                    className={`flex items-center space-x-1.5 transition-colors cursor-pointer ${
-                      hasLikedReview
-                        ? 'text-red-500'
-                        : 'text-gray-500 hover:text-red-500'
-                    }`}
-                  >
-                    <Heart
-                      size={20}
-                      fill={hasLikedReview ? 'currentColor' : 'none'}
-                    />
-                    <span className="font-medium text-sm">
-                      {review.likedBy.length}
-                    </span>
-                  </button>
+                {activeCommentReview === review.id && (
+                  <div className="bg-gray-50 px-5 py-4 border-t border-gray-100">
+                    <div className="space-y-4 mb-4">
+                      {review.comments.map((comment: any) => {
+                        const hasLikedComment =
+                          currentUser &&
+                          comment.likedBy.includes(currentUser.id);
 
-                  <button
-                    onClick={() =>
-                      setActiveCommentReview(
-                        activeCommentReview === review.id ? null : review.id
-                      )
-                    }
-                    className="flex items-center space-x-1.5 text-gray-500 hover:text-indigo-500 transition-colors"
-                  >
-                    <MessageCircle size={20} />
-                    <span className="font-medium text-sm">
-                      {review.comments.length}
-                    </span>
-                  </button>
-                </div>
-              </div>
+                        const isReplying =
+                          currentUser && replyingTo?.commentId === comment.id;
 
-              {activeCommentReview === review.id && (
-                <div className="bg-gray-50 px-5 py-4 border-t border-gray-100">
-                  <div className="space-y-4 mb-4">
-                    {review.comments.map((comment: any) => {
-                      const hasLikedComment =
-                        currentUser &&
-                        comment.likedBy.includes(currentUser.id);
+                        const canDeleteComment =
+                          currentUser &&
+                          (comment.user.id === currentUser.id ||
+                            review.user.id === currentUser.id);
 
-                      const isReplying =
-                        currentUser && replyingTo?.commentId === comment.id;
+                        return (
+                          <div key={comment.id} className="text-sm">
+                            <div className="flex items-start gap-2">
+                              <AvatarDisplay
+                                src={comment.user.avatar}
+                                alt={comment.user.name}
+                                className="w-8 h-8 rounded-full cursor-pointer"
+                                onClick={() => onUserClick(comment.user)}
+                              />
 
-                      return (
-                        <div key={comment.id} className="text-sm">
-                          <div className="flex items-start gap-2">
-                            <AvatarDisplay
-                              src={comment.user.avatar}
-                              alt={comment.user.name}
-                              className="w-8 h-8 rounded-full cursor-pointer"
-                              onClick={() => onUserClick(comment.user)}
-                            />
+                              <div className="flex-1">
+                                <div className="bg-white p-2.5 rounded-lg border border-gray-200 shadow-sm inline-block min-w-full sm:min-w-[60%]">
+                                  <span
+                                    className="font-semibold text-gray-900 cursor-pointer hover:underline"
+                                    onClick={() => onUserClick(comment.user)}
+                                  >
+                                    {comment.user.name}
+                                  </span>
 
-                            <div className="flex-1">
-                              <div className="bg-white p-2.5 rounded-lg border border-gray-200 shadow-sm inline-block min-w-full sm:min-w-[60%]">
-                                <span
-                                  className="font-semibold text-gray-900 cursor-pointer hover:underline"
-                                  onClick={() => onUserClick(comment.user)}
-                                >
-                                  {comment.user.name}
-                                </span>
-
-                                <p className="text-gray-800 mt-0.5">
-                                  {comment.text}
-                                </p>
-                              </div>
-
-                              <div className="flex items-center gap-3 mt-1 ml-1 text-xs text-gray-500 font-medium">
-                                <button
-                                  onClick={() => {
-                                    if (!currentUser) {
-                                      onRequireAuth();
-                                      return;
-                                    }
-                                    actions.onToggleLikeComment(
-                                      review.id,
-                                      comment.id
-                                    );
-                                  }}
-                                  className={`${
-                                    hasLikedComment
-                                      ? 'text-red-500'
-                                      : 'hover:text-gray-800'
-                                  }`}
-                                >
-                                  Curtir ({comment.likedBy.length})
-                                </button>
-
-                                <button
-                                  onClick={() => {
-                                    if (!currentUser) {
-                                      onRequireAuth();
-                                      return;
-                                    }
-                                    setReplyingTo({
-                                      reviewId: review.id,
-                                      commentId: comment.id,
-                                    });
-                                  }}
-                                  className="hover:text-gray-800"
-                                >
-                                  Responder
-                                </button>
-                              </div>
-
-                              {comment.replies.length > 0 && (
-                                <div className="mt-3 space-y-3 pl-4 border-l-2 border-gray-200">
-                                  {comment.replies.map((reply: any) => {
-                                    const hasLikedReply =
-                                      currentUser &&
-                                      reply.likedBy.includes(currentUser.id);
-
-                                    return (
-                                      <div
-                                        key={reply.id}
-                                        className="flex items-start gap-2"
-                                      >
-                                        <AvatarDisplay
-                                          src={reply.user.avatar}
-                                          alt={reply.user.name}
-                                          className="w-6 h-6 rounded-full cursor-pointer text-[10px]"
-                                          onClick={() =>
-                                            onUserClick(reply.user)
-                                          }
-                                        />
-
-                                        <div>
-                                          <div className="bg-gray-100 p-2 rounded-lg border border-gray-200 inline-block">
-                                            <span
-                                              className="font-semibold text-gray-900 text-xs cursor-pointer hover:underline"
-                                              onClick={() =>
-                                                onUserClick(reply.user)
-                                              }
-                                            >
-                                              {reply.user.name}
-                                            </span>
-
-                                            <p className="text-gray-800 mt-0.5">
-                                              {reply.text}
-                                            </p>
-                                          </div>
-
-                                          <div className="mt-1 ml-1 text-[11px] text-gray-500 font-medium">
-                                            <button
-                                              onClick={() => {
-                                                if (!currentUser) {
-                                                  onRequireAuth();
-                                                  return;
-                                                }
-                                                actions.onToggleLikeReply(
-                                                  review.id,
-                                                  comment.id,
-                                                  reply.id
-                                                );
-                                              }}
-                                              className={`${
-                                                hasLikedReply
-                                                  ? 'text-red-500'
-                                                  : 'hover:text-gray-800'
-                                              }`}
-                                            >
-                                              Curtir ({reply.likedBy.length})
-                                            </button>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
+                                  <p className="text-gray-800 mt-0.5">
+                                    {comment.text}
+                                  </p>
                                 </div>
-                              )}
 
-                              {isReplying && (
-                                <div className="mt-3 pl-4 flex gap-2">
-                                  <input
-                                    type="text"
-                                    value={replyText}
-                                    onChange={(e) =>
-                                      setReplyText(e.target.value)
-                                    }
-                                    placeholder={`Respondendo a ${comment.user.name}...`}
-                                    className="flex-1 text-sm rounded-full border-gray-300 px-3 py-1.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-white border shadow-sm"
-                                    onKeyDown={(e) =>
-                                      e.key === 'Enter' &&
-                                      submitReply(review.id, comment.id)
-                                    }
-                                  />
+                                <div className="flex items-center gap-3 mt-1 ml-1 text-xs text-gray-500 font-medium">
+                                  <button
+                                    onClick={() => {
+                                      if (!currentUser) {
+                                        onRequireAuth();
+                                        return;
+                                      }
+                                      actions.onToggleLikeComment(
+                                        review.id,
+                                        comment.id
+                                      );
+                                    }}
+                                    className={`${
+                                      hasLikedComment
+                                        ? 'text-red-500'
+                                        : 'hover:text-gray-800'
+                                    }`}
+                                  >
+                                    {hasLikedComment ? 'Curtiu' : 'Curtir'} (
+                                    {comment.likedBy.length})
+                                  </button>
 
                                   <button
-                                    onClick={() =>
-                                      submitReply(review.id, comment.id)
-                                    }
-                                    className="bg-indigo-600 text-white rounded-full p-1.5 hover:bg-indigo-700"
+                                    onClick={() => {
+                                      if (!currentUser) {
+                                        onRequireAuth();
+                                        return;
+                                      }
+                                      setReplyingTo({
+                                        reviewId: review.id,
+                                        commentId: comment.id,
+                                      });
+                                    }}
+                                    className="hover:text-gray-800"
                                   >
-                                    <Send size={14} />
+                                    Responder
                                   </button>
+
+                                  {canDeleteComment && (
+                                    <button
+                                      onClick={() =>
+                                        actions.onDeleteComment(
+                                          review.id,
+                                          comment.id
+                                        )
+                                      }
+                                      className="flex items-center gap-1 text-gray-400 hover:text-red-600 transition-colors"
+                                      title="Excluir comentário"
+                                    >
+                                      <Trash2 size={12} />
+                                      <span>Excluir</span>
+                                    </button>
+                                  )}
                                 </div>
-                              )}
+
+                                {comment.replies.length > 0 && (
+                                  <div className="mt-3 space-y-3 pl-4 border-l-2 border-gray-200">
+                                    {comment.replies.map((reply: any) => {
+                                      const hasLikedReply =
+                                        currentUser &&
+                                        reply.likedBy.includes(currentUser.id);
+
+                                      const canDeleteReply =
+                                        currentUser &&
+                                        (reply.user.id === currentUser.id ||
+                                          review.user.id === currentUser.id);
+
+                                      return (
+                                        <div
+                                          key={reply.id}
+                                          className="flex items-start gap-2"
+                                        >
+                                          <AvatarDisplay
+                                            src={reply.user.avatar}
+                                            alt={reply.user.name}
+                                            className="w-6 h-6 rounded-full cursor-pointer text-[10px]"
+                                            onClick={() =>
+                                              onUserClick(reply.user)
+                                            }
+                                          />
+
+                                          <div>
+                                            <div className="bg-gray-100 p-2 rounded-lg border border-gray-200 inline-block">
+                                              <span
+                                                className="font-semibold text-gray-900 text-xs cursor-pointer hover:underline"
+                                                onClick={() =>
+                                                  onUserClick(reply.user)
+                                                }
+                                              >
+                                                {reply.user.name}
+                                              </span>
+
+                                              <p className="text-gray-800 mt-0.5">
+                                                {reply.text}
+                                              </p>
+                                            </div>
+
+                                            <div className="flex items-center gap-3 mt-1 ml-1 text-[11px] text-gray-500 font-medium">
+                                              <button
+                                                onClick={() => {
+                                                  if (!currentUser) {
+                                                    onRequireAuth();
+                                                    return;
+                                                  }
+                                                  actions.onToggleLikeReply(
+                                                    review.id,
+                                                    comment.id,
+                                                    reply.id
+                                                  );
+                                                }}
+                                                className={`${
+                                                  hasLikedReply
+                                                    ? 'text-red-500'
+                                                    : 'hover:text-gray-800'
+                                                }`}
+                                              >
+                                                {hasLikedReply
+                                                  ? 'Curtiu'
+                                                  : 'Curtir'}{' '}
+                                                ({reply.likedBy.length})
+                                              </button>
+
+                                              {canDeleteReply && (
+                                                <button
+                                                  onClick={() =>
+                                                    actions.onDeleteReply(
+                                                      review.id,
+                                                      comment.id,
+                                                      reply.id
+                                                    )
+                                                  }
+                                                  className="flex items-center gap-1 text-gray-400 hover:text-red-600 transition-colors"
+                                                  title="Excluir resposta"
+                                                >
+                                                  <Trash2 size={11} />
+                                                  <span>Excluir</span>
+                                                </button>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+
+                                {isReplying && (
+                                  <div className="mt-3 pl-4 flex gap-2">
+                                    <input
+                                      type="text"
+                                      value={replyText}
+                                      onChange={(e) =>
+                                        setReplyText(e.target.value)
+                                      }
+                                      placeholder={`Respondendo a ${comment.user.name}...`}
+                                      className="flex-1 text-sm rounded-full border-gray-300 px-3 py-1.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-white border shadow-sm"
+                                      onKeyDown={(e) =>
+                                        e.key === 'Enter' &&
+                                        submitReply(review.id, comment.id)
+                                      }
+                                    />
+
+                                    <button
+                                      onClick={() =>
+                                        submitReply(review.id, comment.id)
+                                      }
+                                      className="bg-indigo-600 text-white rounded-full p-1.5 hover:bg-indigo-700"
+                                    >
+                                      <Send size={14} />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {currentUser ? (
-                    <div className="flex gap-2 items-center mt-4">
-                      <AvatarDisplay
-                        src={currentUser.avatar}
-                        alt={currentUser.name}
-                        className="w-8 h-8 rounded-full"
-                      />
-
-                      <input
-                        type="text"
-                        value={commentText}
-                        onChange={(e) => setCommentText(e.target.value)}
-                        placeholder="Escreva um comentário..."
-                        className="flex-1 rounded-full border-gray-300 border px-4 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none shadow-sm"
-                        onKeyDown={(e) =>
-                          e.key === 'Enter' && submitComment(review.id)
-                        }
-                      />
-
-                      <button
-                        onClick={() => submitComment(review.id)}
-                        className="bg-indigo-600 text-white p-2 rounded-full hover:bg-indigo-700 shadow-sm"
-                      >
-                        <Send size={16} />
-                      </button>
+                        );
+                      })}
                     </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={onRequireAuth}
-                      className="w-full text-center text-sm text-indigo-600 font-medium mt-4 bg-white hover:bg-indigo-50 p-2.5 rounded-md border border-indigo-200 transition-colors"
-                    >
-                      Faça login para curtir ou comentar
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+
+                    {currentUser ? (
+                      <div className="flex gap-2 items-center mt-4">
+                        <AvatarDisplay
+                          src={currentUser.avatar}
+                          alt={currentUser.name}
+                          className="w-8 h-8 rounded-full"
+                        />
+
+                        <input
+                          type="text"
+                          value={commentText}
+                          onChange={(e) => setCommentText(e.target.value)}
+                          placeholder="Escreva um comentário..."
+                          className="flex-1 rounded-full border-gray-300 border px-4 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none shadow-sm"
+                          onKeyDown={(e) =>
+                            e.key === 'Enter' && submitComment(review.id)
+                          }
+                        />
+
+                        <button
+                          onClick={() => submitComment(review.id)}
+                          className="bg-indigo-600 text-white p-2 rounded-full hover:bg-indigo-700 shadow-sm"
+                        >
+                          <Send size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={onRequireAuth}
+                        className="w-full text-center text-sm text-indigo-600 font-medium mt-4 bg-white hover:bg-indigo-50 p-2.5 rounded-md border border-indigo-200 transition-colors"
+                      >
+                        Faça login para curtir ou comentar
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
@@ -1488,8 +1662,14 @@ const DirectMessagesView = ({
   );
 };
 
-// 6. CHATBOT FLUTUANTE NO CANTO INFERIOR DIREITO (MESMA LÓGICA WEBSOCKET + LAMBDA + GEMINI)
-const FloatingChatbot = ({ currentUser }: { currentUser: any }) => {
+// 6. CHATBOT FLUTUANTE NO CANTO INFERIOR DIREITO (FAQ LOCAL PARA VISITANTES + WEBSOCKET/GEMINI PARA LOGADOS)
+const FloatingChatbot = ({
+  currentUser,
+  onRequireAuth,
+}: {
+  currentUser: any;
+  onRequireAuth: () => void;
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<
     {
@@ -1503,7 +1683,7 @@ const FloatingChatbot = ({ currentUser }: { currentUser: any }) => {
   const [inputMsg, setInputMsg] = useState('');
   const [connectionStatus, setConnectionStatus] = useState<
     'connecting' | 'connected' | 'disconnected' | 'error'
-  >('connecting');
+  >('disconnected');
 
   const [isWaitingResponse, setIsWaitingResponse] = useState(false);
   const [connectionError, setConnectionError] = useState('');
@@ -1516,6 +1696,14 @@ const FloatingChatbot = ({ currentUser }: { currentUser: any }) => {
   }, [messages, isWaitingResponse, isOpen]);
 
   useEffect(() => {
+    setMessages([]);
+
+    if (!currentUser) {
+      setConnectionStatus('disconnected');
+      setConnectionError('');
+      return;
+    }
+
     let socket: WebSocket | null = null;
     let isMounted = true;
 
@@ -1638,7 +1826,30 @@ const FloatingChatbot = ({ currentUser }: { currentUser: any }) => {
       }
       socketRef.current = null;
     };
-  }, []);
+  }, [currentUser?.id]);
+
+  const handleFaqClick = (faq: { question: string; answer: string }) => {
+    const now = new Date().toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `${Date.now()}-guest-q`,
+        sender: 'user',
+        text: faq.question,
+        timestamp: now,
+      },
+      {
+        id: `${Date.now() + 1}-guest-a`,
+        sender: 'assistant',
+        text: faq.answer,
+        timestamp: now,
+      },
+    ]);
+  };
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1701,7 +1912,9 @@ const FloatingChatbot = ({ currentUser }: { currentUser: any }) => {
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span
                     className={`w-2 h-2 rounded-full ${
-                      connectionStatus === 'connected'
+                      !currentUser
+                        ? 'bg-emerald-300'
+                        : connectionStatus === 'connected'
                         ? 'bg-green-400'
                         : connectionStatus === 'connecting'
                         ? 'bg-yellow-300'
@@ -1709,7 +1922,9 @@ const FloatingChatbot = ({ currentUser }: { currentUser: any }) => {
                     }`}
                   />
                   <span className="text-[11px] text-indigo-100">
-                    {connectionStatus === 'connected'
+                    {!currentUser
+                      ? 'Visitante • Perguntas Rápidas'
+                      : connectionStatus === 'connected'
                       ? 'Conectado (Gemini)'
                       : connectionStatus === 'connecting'
                       ? 'Conectando...'
@@ -1720,7 +1935,7 @@ const FloatingChatbot = ({ currentUser }: { currentUser: any }) => {
             </div>
 
             <div className="flex items-center gap-2">
-              {connectionStatus !== 'connected' && (
+              {currentUser && connectionStatus !== 'connected' && (
                 <button
                   type="button"
                   onClick={handleReconnect}
@@ -1741,15 +1956,29 @@ const FloatingChatbot = ({ currentUser }: { currentUser: any }) => {
 
           <div className="flex-1 p-4 overflow-y-auto bg-[#F9FAFB] space-y-3">
             {messages.length === 0 && (
-              <div className="text-center text-gray-400 mt-10">
-                <Bot size={36} className="mx-auto mb-2 opacity-50" />
-                <p className="font-medium text-sm">
-                  Olá, {currentUser?.name?.split(' ')[0]}!
-                </p>
-                <p className="text-xs mt-1">
-                  Envie uma pergunta para conversar com o assistente do
-                  BookConnect.
-                </p>
+              <div className="text-center text-gray-500 mt-4">
+                <Bot size={36} className="mx-auto mb-2 text-indigo-400" />
+                {currentUser ? (
+                  <>
+                    <p className="font-medium text-sm text-gray-700">
+                      Olá, {currentUser?.name?.split(' ')[0]}!
+                    </p>
+                    <p className="text-xs mt-1 text-gray-500">
+                      Envie uma pergunta para conversar com o assistente do
+                      BookConnect.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium text-sm text-gray-700">
+                      Olá! Bem-vindo ao BookConnect 📚
+                    </p>
+                    <p className="text-xs mt-1 text-gray-500">
+                      Escolha uma pergunta abaixo para saber como o site
+                      funciona:
+                    </p>
+                  </>
+                )}
               </div>
             )}
 
@@ -1783,6 +2012,26 @@ const FloatingChatbot = ({ currentUser }: { currentUser: any }) => {
               );
             })}
 
+            {!currentUser && (
+              <div className="pt-2 space-y-2">
+                <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
+                  Perguntas rápidas
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {GUEST_FAQ.map((faq) => (
+                    <button
+                      key={faq.question}
+                      type="button"
+                      onClick={() => handleFaqClick(faq)}
+                      className="text-left text-xs bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl px-3 py-1.5 transition-colors shadow-sm"
+                    >
+                      {faq.question}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {isWaitingResponse && (
               <div className="flex justify-start">
                 <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-3.5 py-2.5 text-xs text-gray-500">
@@ -1793,40 +2042,60 @@ const FloatingChatbot = ({ currentUser }: { currentUser: any }) => {
             <div ref={messagesEndRef} />
           </div>
 
-          {connectionError && (
+          {currentUser && connectionError && (
             <div className="px-3 py-2 bg-red-50 border-t border-red-100 text-xs text-red-600">
               {connectionError}
             </div>
           )}
 
           <div className="p-3 bg-white border-t border-gray-200">
-            <form onSubmit={handleSend} className="flex gap-2">
-              <input
-                type="text"
-                value={inputMsg}
-                onChange={(e) => setInputMsg(e.target.value)}
-                placeholder={
-                  connectionStatus === 'connected'
-                    ? 'Digite sua pergunta...'
-                    : 'Aguardando conexão...'
-                }
-                disabled={connectionStatus !== 'connected'}
-                className="flex-1 bg-gray-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-full px-4 py-2 text-sm outline-none transition-all disabled:opacity-60"
-              />
+            {currentUser ? (
+              <form onSubmit={handleSend} className="flex gap-2">
+                <input
+                  type="text"
+                  value={inputMsg}
+                  onChange={(e) => setInputMsg(e.target.value)}
+                  placeholder={
+                    connectionStatus === 'connected'
+                      ? 'Digite sua pergunta...'
+                      : 'Aguardando conexão...'
+                  }
+                  disabled={connectionStatus !== 'connected'}
+                  className="flex-1 bg-gray-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-full px-4 py-2 text-sm outline-none transition-all disabled:opacity-60"
+                />
 
-              <button
-                type="submit"
-                disabled={
-                  !inputMsg.trim() ||
-                  connectionStatus !== 'connected' ||
-                  isWaitingResponse
-                }
-                className="bg-indigo-600 text-white p-2.5 rounded-full hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-                title="Enviar pergunta"
-              >
-                <Send size={16} />
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  disabled={
+                    !inputMsg.trim() ||
+                    connectionStatus !== 'connected' ||
+                    isWaitingResponse
+                  }
+                  className="bg-indigo-600 text-white p-2.5 rounded-full hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                  title="Enviar pergunta"
+                >
+                  <Send size={16} />
+                </button>
+              </form>
+            ) : (
+              <div className="text-center space-y-2">
+                <p className="text-xs text-gray-600">
+                  Quer conversar livremente com a IA (Gemini) e pedir
+                  recomendações?
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
+                    onRequireAuth();
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 bg-indigo-600 text-white text-xs font-semibold py-2 px-4 rounded-full hover:bg-indigo-700 transition-colors"
+                >
+                  <LogIn size={14} />
+                  <span>Fazer login para usar a IA completa</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1835,7 +2104,7 @@ const FloatingChatbot = ({ currentUser }: { currentUser: any }) => {
       <button
         onClick={() => setIsOpen((prev) => !prev)}
         className="w-14 h-14 rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 hover:scale-105 transition-all flex items-center justify-center"
-        title="Abrir Assistente IA (BookConnect)"
+        title="Abrir Assistente (BookConnect)"
       >
         {isOpen ? <X size={24} /> : <Bot size={26} />}
       </button>
@@ -1958,7 +2227,7 @@ export default function App() {
       const idToken = session.tokens?.idToken?.toString();
       if (!idToken) return;
 
-      await fetch(REVIEWS_API_URL, {
+      const res = await fetch(REVIEWS_API_URL, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${idToken}`,
@@ -1966,6 +2235,14 @@ export default function App() {
         },
         body: JSON.stringify({ reviews: updatedReviews }),
       });
+
+      if (!res.ok) {
+        console.error(
+          'Falha ao salvar resenhas no DynamoDB:',
+          res.status,
+          await res.text()
+        );
+      }
     } catch (err) {
       console.error('Erro ao salvar interações do feed no DynamoDB:', err);
     }
@@ -2182,7 +2459,7 @@ export default function App() {
     if (!currentUser) {
       setCurrentView('auth');
       return;
-    };
+    }
 
     setReviews((prev) => {
       const updated = prev.map((review) =>
@@ -2202,7 +2479,7 @@ export default function App() {
     if (!currentUser) {
       setCurrentView('auth');
       return;
-    };
+    }
 
     setReviews((prev) => {
       const updated = prev.map((review) =>
@@ -2267,7 +2544,7 @@ export default function App() {
     if (!currentUser) {
       setCurrentView('auth');
       return;
-    };
+    }
 
     const newComment = {
       id: Date.now().toString(),
@@ -2283,6 +2560,23 @@ export default function App() {
           ? {
               ...review,
               comments: [...review.comments, newComment],
+            }
+          : review
+      );
+      persistReviews(updated);
+      return updated;
+    });
+  };
+
+  const handleDeleteComment = (reviewId: string, commentId: string) => {
+    if (!currentUser) return;
+
+    setReviews((prev) => {
+      const updated = prev.map((review) =>
+        review.id === reviewId
+          ? {
+              ...review,
+              comments: review.comments.filter((c: any) => c.id !== commentId),
             }
           : review
       );
@@ -2315,6 +2609,36 @@ export default function App() {
                   ? {
                       ...comment,
                       replies: [...comment.replies, newReply],
+                    }
+                  : comment
+              ),
+            }
+          : review
+      );
+      persistReviews(updated);
+      return updated;
+    });
+  };
+
+  const handleDeleteReply = (
+    reviewId: string,
+    commentId: string,
+    replyId: string
+  ) => {
+    if (!currentUser) return;
+
+    setReviews((prev) => {
+      const updated = prev.map((review) =>
+        review.id === reviewId
+          ? {
+              ...review,
+              comments: review.comments.map((comment: any) =>
+                comment.id === commentId
+                  ? {
+                      ...comment,
+                      replies: comment.replies.filter(
+                        (r: any) => r.id !== replyId
+                      ),
                     }
                   : comment
               ),
@@ -2406,7 +2730,9 @@ export default function App() {
                   onToggleLikeComment: handleLikeComment,
                   onToggleLikeReply: handleLikeReply,
                   onAddComment: handleAddComment,
+                  onDeleteComment: handleDeleteComment,
                   onAddReply: handleAddReply,
+                  onDeleteReply: handleDeleteReply,
                 }}
               />
             )}
@@ -2442,8 +2768,11 @@ export default function App() {
         )}
       </main>
 
-      {/* Chatbot flutuante no canto inferior direito — apenas para usuários logados */}
-      {currentUser && <FloatingChatbot currentUser={currentUser} />}
+      {/* Chatbot flutuante — FAQ local para visitantes e IA (Gemini) para logados */}
+      <FloatingChatbot
+        currentUser={currentUser}
+        onRequireAuth={() => setCurrentView('auth')}
+      />
     </div>
   );
 }
