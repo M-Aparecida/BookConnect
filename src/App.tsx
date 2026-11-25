@@ -2449,7 +2449,7 @@ const DirectMessagesView = ({
       <div className="mb-4 flex items-baseline justify-between">
         <div>
           <h2 className="font-serif-display text-3xl font-bold text-[#1F1C18]">
-            Correspondências
+            Mensagens
           </h2>
           <p className="text-xs sm:text-sm text-[#6E665C] mt-0.5">
             Converse diretamente com outros leitores do BookConnect.
@@ -2941,7 +2941,7 @@ const FloatingChatbot = ({
               </div>
               <div>
                 <p className="font-serif-display font-bold text-lg leading-tight">
-                  Curador BookConnect
+                  ChaBot BookConnect
                 </p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span
