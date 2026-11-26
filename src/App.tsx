@@ -2730,11 +2730,12 @@ const FloatingChatbot = ({
   }, [messages, isWaitingResponse, isOpen]);
 
   useEffect(() => {
-    setMessages([]);
-
-    if (!currentUser) {
-      setConnectionStatus('disconnected');
-      setConnectionError('');
+    if (!currentUser || !isOpen) {
+      if (!currentUser) {
+        setMessages([]);
+        setConnectionStatus('disconnected');
+        setConnectionError('');
+      }
       return;
     }
 
@@ -2860,7 +2861,7 @@ const FloatingChatbot = ({
       }
       socketRef.current = null;
     };
-  }, [currentUser?.id]);
+  }, [currentUser?.id, isOpen]);
 
   const handleFaqClick = (faq: { question: string; answer: string }) => {
     const now = new Date().toLocaleTimeString([], {
