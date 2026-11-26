@@ -1,4 +1,3 @@
-
 import { Amplify } from 'aws-amplify';
 
 Amplify.configure({
@@ -18,11 +17,13 @@ Amplify.configure({
           redirectSignIn: [
             'http://localhost:5173/',
             'https://aparecida.dunga.web.ufersa.dev.br',
+            'https://www.aparecida.dunga.web.ufersa.dev.br',
           ],
 
           redirectSignOut: [
             'http://localhost:5173/',
             'https://aparecida.dunga.web.ufersa.dev.br',
+            'https://www.aparecida.dunga.web.ufersa.dev.br',
           ],
 
           responseType: 'code',
