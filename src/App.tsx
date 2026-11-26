@@ -2462,7 +2462,7 @@ const DirectMessagesView = ({
         <div
           className={`${
             mobileShowChat ? 'hidden md:flex' : 'flex'
-          } w-full md:w-80 border-r border-[#EFECE4] bg-[#FBF9F5] flex-col`}
+          } w-full md:w-80 shrink-0 border-r border-[#EFECE4] bg-[#FBF9F5] flex-col`}
         >
           <div className="px-4 py-3.5 border-b border-[#EFECE4] flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-[#6E665C]">
@@ -2556,7 +2556,7 @@ const DirectMessagesView = ({
         <div
           className={`${
             mobileShowChat ? 'flex' : 'hidden md:flex'
-          } flex-1 flex-col bg-white`}
+          } flex-1 min-w-0 overflow-hidden flex-col bg-white`}
         >
           {selectedContact ? (
             <>
